@@ -1,0 +1,201 @@
+# Copyright (c) 2017 Wind River Systems Inc.
+#
+# Permission is hereby granted, free of charge, to any person obtaining a copy
+# of this software and associated documentation files (the "Software"), to deal
+# in the Software without restriction, including without limitation the rights
+# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+# copies of the Software, and to permit persons to whom the Software is
+# furnished to do so, subject to the following conditions:
+#
+# The above copyright notice and this permission notice shall be included in all
+# copies or substantial portions of the Software.
+#
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+# SOFTWARE.
+
+version: '3.2'
+services:
+  jenkins:
+    image: ${REGISTRY:-windriver}/jenkins-master:${JENKINS_MASTER_TAG:-latest}
+    environment:
+      JAVA_OPTS: >
+        -Djenkins.install.runSetupWizard=false
+        -Dhudson.slaves.WorkspaceList=_
+        -Dhudson.security.csrf.requestfield=Jenkins-Crumb
+        -Dorg.jenkinsci.remoting.engine.JnlpProtocol1.disabled=true
+        -Dorg.jenkinsci.remoting.engine.JnlpProtocol2.disabled=true
+        -Dorg.jenkinsci.remoting.engine.JnlpProtocol3.disabled=true
+      JENKINS_OPTS: '--httpPort=8080 --httpListenAddress=0.0.0.0 --prefix=/jenkins'
+      JENKINS_UI_URL: "https://$HOST/jenkins/"
+      JENKINS_AGENT_PASSWORD : "${JENKINS_AGENT_PASSWORD}"
+    deploy:
+      replicas: 1
+      placement:
+        constraints:
+          - "node.labels.type == master"
+    networks:
+      - net
+    volumes:
+      - jenkins_home:/var/jenkins_home
+      - type: tmpfs
+        target: /tmp
+    secrets:
+      - agent_password
+
+  rproxy:
+    image: blacklabelops/nginx:${RPROXY_TAG:-latest}
+    deploy:
+      replicas: 1
+      placement:
+        constraints:
+          - "node.labels.type == master"
+    ports:
+      - "443:443"
+    environment:
+      SERVER1HTTPS_ENABLED: "true"
+      SERVER1HTTP_ENABLED: "false"
+      SERVER1SERVER_NAME: "localhost"
+      # Jenkins at root path so it can be accessed by workers path
+      SERVER1REVERSE_PROXY_LOCATION1: "/jenkins"
+      SERVER1REVERSE_PROXY_PASS1: "http://jenkins:8080"
+      SERVER1REVERSE_PROXY_APPLICATION1: "jenkins"
+      SERVER1REVERSE_PROXY_LOCATION2: "/toaster_aggregator"
+      SERVER1REVERSE_PROXY_PASS2: "http://toaster_aggregator:6543"
+      SERVER1REVERSE_PROXY_LOCATION3: "/builds"
+      SERVER1REVERSE_PROXY_APPLICATION3: "custom"
+      SERVER1REVERSE_PROXY_DIRECTIVE3FIELD1: 'alias /var/lib/nginx/html/builds/'
+      SERVER1REVERSE_PROXY_DIRECTIVE3FIELD2: 'autoindex on'
+      SERVER1REVERSE_PROXY_LOCATION4: "/auth"
+      SERVER1REVERSE_PROXY_APPLICATION4: "custom"
+      SERVER1REVERSE_PROXY_DIRECTIVE4FIELD1: 'alias /var/lib/nginx/html/jenkins_home/auth/'
+      SERVER1REVERSE_PROXY_DIRECTIVE4FIELD2: 'autoindex on'
+      NGINX_REDIRECT_PORT80: "true"
+      SERVER1CERTIFICATE_DNAME: "/CN=WindRiver/OU=Linux/O=windriver.com/L=Alameda/C=US"
+      DISABLE_ACCESS_LOG: "true"
+      LOG_LEVEL: "warn"
+    networks:
+      - net
+    volumes:
+      - ./index.html:/var/lib/nginx/html/index.html
+      # Volume avoids recreating certs on every run
+      - rproxy_nginx_config:/etc/nginx/keys
+      # expose the rsync server contents over https
+      - rsync_builds:/var/lib/nginx/html/builds/:ro
+      # expose the jenkins auth content over https
+      - jenkins_home:/var/lib/nginx/html/jenkins_home/:ro
+      - type: tmpfs
+        target: /tmp
+
+  client:
+    image: ${REGISTRY:-windriver}/jenkins-swarm-client:${JENKINS_AGENT_TAG:-latest}
+    deploy:
+      mode: global
+      placement:
+        constraints:
+          - "node.labels.type != master"
+    depends_on:
+      - jenkins
+    environment:
+      COMMAND_OPTIONS: "-master http://jenkins:8080/jenkins -disableSslVerification -labels 'docker' -executors 2"
+      SWARM_DELAYED_START: "15"
+      SWARM_AGENT_PASSWORD: "${JENKINS_AGENT_PASSWORD}"
+    networks:
+      - net
+    volumes:
+      # Allow jenkins agent to use host docker to run containers
+      - /var/run/docker.sock:/var/run/docker.sock
+      # Required to mount workspace from swarm client into docker container
+      - jenkins_agent:/home/jenkins
+      - /etc/hostname:/etc/hostname
+      - /etc/localtime:/etc/localtime
+      - type: tmpfs
+        target: /tmp
+    secrets:
+      - agent_password
+
+  consul:
+    image: consul:${CONSUL_TAG:-0.9.3}
+    deploy:
+      replicas: 1
+      placement:
+        constraints:
+          - "node.labels.type == master"
+    environment:
+      - "CONSUL_LOCAL_CONFIG={\"disable_update_check\": true}"
+      - "CONSUL_BIND_INTERFACE=eth0"
+      - "CONSUL_HTTP_ADDR=0.0.0.0"
+    entrypoint:
+      - consul
+      - agent
+      - -server
+      - -bootstrap-expect=1
+      - -data-dir=/tmp/consuldata
+      - -bind={{ GetInterfaceIP "eth0" }}
+      - -client=0.0.0.0
+    networks:
+      - net
+    volumes:
+      - type: tmpfs
+        target: /tmp
+
+  registrator:
+    image: gliderlabs/registrator:latest
+    command: -ip=$HOSTIP consul://consul:8500
+    deploy:
+      mode: global
+      placement:
+        constraints:
+          - "node.labels.type != master"
+    networks:
+      - net
+    depends_on:
+      - consul
+    volumes:
+      # Allow jenkins agent to use host docker to run containers
+      - /var/run/docker.sock:/tmp/docker.sock
+      - /etc/hostname:/etc/hostname
+
+  toaster_aggregator:
+    image: ${REGISTRY:-windriver}/toaster_aggregator
+    deploy:
+      replicas: 1
+      placement:
+        constraints:
+          - "node.labels.type == master"
+    depends_on:
+      - consul
+    networks:
+      - net
+
+  rsync:
+    image: ${REGISTRY:-windriver}/rsync
+    deploy:
+      replicas: 1
+      placement:
+        constraints:
+          - "node.labels.type == master"
+    networks:
+      - rsync_net
+    volumes:
+      - rsync_builds:/builds
+
+volumes:
+  jenkins_home:
+  jenkins_agent:
+  rproxy_nginx_config:
+  rsync_builds:
+
+secrets:
+  agent_password:
+    external: true
+
+networks:
+  net:
+    driver: ${NETWORK_TYPE:-bridge}
+  rsync_net:
+    external: true

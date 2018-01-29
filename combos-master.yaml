@@ -1,0 +1,14 @@
+- branch: master
+  build:
+  - bitbake
+  - core-image-minimal
+  name: master-minimal
+  prebuild:
+  - notconfigure.sh
+  - --enable-shared-sstate=yes
+  - --enable-bootimage=ext4
+  setup:
+  - wr-lx-setup.sh
+  - --machine=qemux86-64
+  - --distro=poky
+  - --layers=meta-poky
