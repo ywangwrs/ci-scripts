@@ -424,6 +424,13 @@ def main():
                 branch = branches.find('hudson.plugins.git.BranchSpec').find('name')
                 branch.text = '*/' + opts.ci_branch
                 xml_config = ET.tostring(root, encoding="unicode")
+            if opts.ci_repo:
+                import xml.etree.ElementTree as ET
+                root = ET.fromstring(xml_config)
+                userRemoteConfigs = root.find('definition').find('scm').find('userRemoteConfigs')
+                ci_repo = userRemoteConfigs.find('hudson.plugins.git.UserRemoteConfig').find('url')
+                ci_repo.text = opts.ci_repo
+                xml_config = ET.tostring(root, encoding="unicode")
 
     try:
         server.get_job_config(opts.job)
