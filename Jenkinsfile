@@ -83,7 +83,7 @@ node('docker') {
         withEnv(devbuild_args) {
           dir('ci-scripts/layerindex') {
             sh "printenv"
-            sh "./layerindex_start.sh"
+            sh "./layerindex_start.sh --type ${LAYERINDEX_TYPE}"
             sh "./layerindex_layer_update.sh"
           }
         }

@@ -203,6 +203,10 @@ def create_parser():
     op.add_argument("--devbuild_layer_vcs_subdir", dest="devbuild_layer_vcs_subdir", required=False,
                     help="Specify the subdir of a repository in which to find the layer.")
 
+    op.add_argument("--layerindex_type", dest="layerindex_type", required=False,
+                    help="Specify the type of layer index. \n"
+                    "Default: restapi-web")
+
     op.add_argument("--layerindex_source", dest="layerindex_source", required=False,
                     help="Specify the source URL of layer index. \n"
                     "Default: https://layers.openembedded.org/layerindex/api")
@@ -475,6 +479,7 @@ def main():
                                            'GIT_CREDENTIAL': opts.git_credential,
                                            'GIT_CREDENTIAL_ID': opts.git_credential_id,
                                            'DEVBUILD_ARGS': opts.devbuild_args,
+                                           'LAYERINDEX_TYPE': opts.layerindex_type,
                                            'LAYERINDEX_SOURCE': opts.layerindex_source,
                                            'BITBAKE_REPO_URL': opts.bitbake_repo_url,
                                            'TEST': opts.test,

@@ -92,6 +92,11 @@
           <defaultValue></defaultValue>
         </hudson.model.StringParameterDefinition>
         <hudson.model.StringParameterDefinition>
+          <name>LAYERINDEX_TYPE</name>
+          <description>Specify the type of layer index</description>
+          <defaultValue>restapi-web</defaultValue>
+        </hudson.model.StringParameterDefinition>
+        <hudson.model.StringParameterDefinition>
           <name>LAYERINDEX_SOURCE</name>
           <description>Specify the source URL of layer index</description>
           <defaultValue>https://layers.openembedded.org/layerindex/api/</defaultValue>

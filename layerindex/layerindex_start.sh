@@ -39,7 +39,6 @@ if [ -n "$BUILD_ID" ]; then
     export COMPOSE_PROJECT_NAME="build$BUILD_ID"
 fi
 
-TYPE=restapi-web
 BASE_URL=https://github.com/WindRiver-Labs/
 OUTPUT=/opt/layerindex
 
@@ -67,6 +66,10 @@ do
     esac
     shift
 done
+
+if [ "$TYPE" == '' ]; then
+    TYPE=restapi-web
+fi
 
 if [ "$TYPE" == 'restapi-web' ] && [ -z "$SOURCE" ]; then
     echo "When import type is restapi-web a source layerindex must be defined"
