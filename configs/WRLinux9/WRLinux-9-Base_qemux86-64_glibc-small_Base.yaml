@@ -69,7 +69,7 @@ layerindex_overrides:
     layer_vcs_url: https://github.com/WindRiver-Labs/wr-fixes
     # Specify the branch to be used with on the modified layer for a Devbuild.
     # Defaults to branch used for build.
-    layer_actual_branch: wr-9.0-20171109
+    layer_actual_branch: WRLINUX_9_BASE_RCPL0013
     # Specify the subdir of a repository in which to find the layer.
     layer_vcs_subdir:
 

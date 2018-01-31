@@ -39,7 +39,7 @@ if [ -n "$BUILD_ID" ]; then
     export COMPOSE_PROJECT_NAME="build$BUILD_ID"
 fi
 
-BASE_URL=https://github.com/WindRiver-Labs/
+BASE_URL=https://github.com/WindRiver-Labs
 OUTPUT=/opt/layerindex
 
 if [ -z "$LAYERINDEX_SOURCE" ]; then
