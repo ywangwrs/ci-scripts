@@ -25,13 +25,13 @@
 #
 # To populate it with entries from a running layerindex like layers.openembedded.org:
 #
-# ./layerindex_start.sh --input=restapi-web --branch=master \
+# ./layerindex_start.sh --type=restapi-web --branch=master \
 #          --source=https://layers.openembedded.org/layerindex/api/
 #
 # To populate it with a cached mirror-index:
 #
 # ./layerindex_start.sh --type=restapi-files --branch=WRLINUX_9_BASE \
-#    --base_url=https://github.com/WindRiver-Labs/wrlinux-9.git \
+#    --base_url=https://github.com/WindRiver-Labs/ \
 #    --source=https://github.com/WindRiver-Labs/mirror-index.git
 
 COMPOSE_PROJECT_NAME=${PWD##*/}
@@ -48,8 +48,10 @@ else
     SOURCE="$LAYERINDEX_SOURCE"
 fi
 
-if [ -z "$BRANCH" ]; then
+if [ -z "$DEVBUILD_BRANCH" ]; then
     BRANCH=WRLINUX_9_BASE
+else
+    BRANCH="$DEVBUILD_BRANCH"
 fi
 
 echo "Command: $0"
