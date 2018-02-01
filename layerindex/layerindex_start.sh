@@ -54,6 +54,12 @@ else
     BRANCH="$DEVBUILD_BRANCH"
 fi
 
+if [ -z "$REMOTE" ]; then
+    REMOTE=https://github.com/WindRiver-Labs/wrlinux-9
+fi
+
+SETUPTOOLS=$(echo "$REMOTE" |sed 's/https:\/\/github.com\/WindRiver-Labs\///g')
+
 echo "Command: $0"
 for i in "$@"
 do
@@ -113,10 +119,10 @@ echo "Initializing database"
 "${DOCKER_EXEC[@]}" layerindex /bin/bash -c 'cd /opt/layerindex; python3 manage.py migrate'
 
 # clone repos that will be used to generate initial layerindex state
-"${DOCKER_EXEC[@]}" layerindex /bin/bash -c 'cd /opt/; git clone --depth=1 https://github.com/WindRiver-Labs/wrlinux-9.git'
+"${DOCKER_EXEC[@]}" layerindex /bin/bash -c "cd /opt/; git clone --depth=1 $REMOTE"
 
 # copy script that transforms mirror-index into django format
-docker cp ./transform_index.py "${COMPOSE_PROJECT_NAME}_layerindex_1":/opt/wrlinux-9/bin
+docker cp ./transform_index.py "${COMPOSE_PROJECT_NAME}_layerindex_1":/opt/"$SETUPTOOLS"/bin
 
 declare -a TRANSFORM_CMD
 
@@ -134,7 +140,7 @@ TRANSFORM_CMD+=(--input "$TYPE" --branch "$BRANCH" --output "$OUTPUT" --source "
 # transform mirror-index to django format
 echo
 echo "Transforming database"
-"${DOCKER_EXEC[@]}" layerindex /bin/bash -c "cd /opt/wrlinux-9/bin; ./transform_index.py ${TRANSFORM_CMD[*]}"
+"${DOCKER_EXEC[@]}" layerindex /bin/bash -c "cd /opt/"$SETUPTOOLS"/bin; ./transform_index.py ${TRANSFORM_CMD[*]}"
 
 # import initial layerindex state.
 echo

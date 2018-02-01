@@ -12,3 +12,17 @@
   - --machine=intel-x86-64
   - --dl-layers
   - --accept-eula=yes
+- branch: WRLinux-lts-17-Base
+  build:
+  - bitbake
+  - wrlinux-image-glibc-small
+  name: qemux86-64_glibc-small_Base
+  prebuild:
+  - notconfigure.sh
+  - --test-image=yes
+  - --enable-bootimage=ext4
+  - --no-network=0
+  - --premirror_path=/home/wrlbuild/premirror-master-wr
+  setup:
+  - --distro=wrlinux-small
+  - --machine=qemux86-64
