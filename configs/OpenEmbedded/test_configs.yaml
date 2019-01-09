@@ -1,0 +1,10 @@
+- name: linaro-smoke-test
+  prebuild_cmd_for_test:
+  - test_configure.py
+  build_cmd_for_test:
+  build_options:
+  - IMAGE_FSTYPES += "ext4"
+  lava_test_repo: https://github.com/ywangwrs/lava-test.git
+  aws-ec2_qemu-x86_64:
+    job_template: lava-test/jobs/templates/OpenEmbedded/x86_64_qemu_job_lava-smoke-test_template.yaml
+    timeout: 300
