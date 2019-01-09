@@ -27,6 +27,7 @@ if [ ! -f "$LOCALCONF" ]; then
     exit 1
 fi
 
+KERNEL_TYPE=
 RM_WORK=yes
 PKG_JOBS=
 JOBS=
@@ -36,6 +37,8 @@ PATCHRESOLVE=
 BUILDTYPE=
 SYSTEM_INIT=
 PKGS=
+WHITELIST_PKGS=
+WHITELIST_INTEL_PKGS=
 PKG_MANAGER=
 LICENSE_BLACKLIST=
 DEBUGINFO_SPLIT=
@@ -47,11 +50,12 @@ BB_NO_NETWORK=
 PREMIRROR_PATH=
 DL_DIR=
 MACHINE=
-SHARED_SSTATE_DIR=no
+SHARED_SSTATE_DIR=
 
 for i in "$@"
 do
     case $i in
+        --kernel-type=*)        KERNEL_TYPE="${i#*=}" ;;
         --rm_work=*)            RM_WORK="${i#*=}" ;;
         --parallel_pkgbuilds=*) PKG_JOBS="${i#*=}" ;;
         --jobs=*)               JOBS="${i#*=}" ;;
@@ -61,6 +65,8 @@ do
         --enable-build=*)       BUILDTYPE="${i#*=}" ;;
         --with-init=*)          SYSTEM_INIT="${i#*=}" ;;
         --with-package=*)       PKGS="${i#*=}" ;;
+        --whitelist-package=*)  WHITELIST_PKGS="${i#*=}" ;;
+        --whitelist-intel-package=*)         WHITELIST_INTEL_PKGS="${i#*=}" ;;
         --enable-package-manager=*)          PKG_MANAGER="${i#*=}" ;;
         --with-license-flags-blacklist=*)    LICENSE_BLACKLIST="${i#*=}" ;;
         --with-license-blacklist=*)          LICENSE_BLACKLIST="${i#*=}" ;;
@@ -68,7 +74,8 @@ do
         --allow-bsp-pkgs=*)     ALLOW_BSP_PKGS="${i#*=}" ;;
         --test-image=*)         TEST_IMAGE="${i#*=}" ;;
         --oe-test=*)            OE_TEST="${i#*=}" ;;
-        --test-suites=*)        TEST_SUITES="${i#*=}" ;;
+        --oe-test-suites=*)     OE_TEST_SUITES="${i#*=}" ;;
+        --lava-test=*)          LAVA_TEST="${i#*=}" ;;
         --no-network=*)         BB_NO_NETWORK="${i#*=}" ;;
         --premirror_path=*)     PREMIRROR_PATH="${i#*=}" ;;
         --dl_dir=*)             DL_DIR="${i#*=}" ;;
@@ -124,6 +131,9 @@ process_bootimage(){
         hdd)
             echo "IMAGE_FSTYPES += \"ext3\""
             ;;
+        hddimg)
+            echo "IMAGE_FSTYPES += \"hddimg\""
+            ;;
         ext2|ext3|ext4)
             echo "IMAGE_FSTYPES += \"${i}\""
             ;;
@@ -157,7 +167,25 @@ process_package(){
     done
 }
 
+process_whitelist(){
+    local packages=$1
+    for i in ${packages//,/ } ; do
+        echo "PNWHITELIST_openembedded-layer += \"$i\""
+    done
+}
+
+process_whitelist_intel(){
+    local packages=$1
+    for i in ${packages//,/ } ; do
+        echo "PNWHITELIST_intel += \"$i\""
+    done
+}
+
 {
+    if [ -n "$KERNEL_TYPE" ]; then
+        echo "PREFERRED_PROVIDER_virtual/kernel = \"linux-yocto\""
+    fi
+
     if [ "$RM_WORK" == "yes" ]; then
         echo "INHERIT += \"rm_work\""
     fi
@@ -167,7 +195,7 @@ process_package(){
     fi
 
     if [ -n "$PKG_JOBS" ]; then
-        echo "BB_NUMER_THREADS = \"$PKG_JOBS\""
+        echo "BB_NUMBER_THREADS = \"$PKG_JOBS\""
     fi
 
     if [ "$BUILDSTATS" == "yes" ]; then
@@ -190,7 +218,15 @@ process_package(){
         process_package "$PKGS"
     fi
 
-    if [ -n "$DEBUGINFO_SPLIT" -a "$DEBUGINFO_SPLIT" == "no" ]; then
+    if [ -n "$WHITELIST_PKGS" ]; then
+        process_whitelist "$WHITELIST_PKGS"
+    fi
+
+    if [ -n "$WHITELIST_INTEL_PKGS" ]; then
+        process_whitelist_intel "$WHITELIST_INTEL_PKGS"
+    fi
+
+    if [ -n "$DEBUGINFO_SPLIT" ] && [ "$DEBUGINFO_SPLIT" == "no" ]; then
         echo "INHIBIT_PACKAGE_DEBUG_SPLIT = \"1\""
     fi
 
@@ -217,18 +253,8 @@ process_package(){
         echo "IMAGE_FSTYPES_remove = \"live\""
     fi
 
-    if [ -n "$OE_TEST" ] && [ "$OE_TEST" != "no" ]; then
+    if [ -n "$OE_TEST" ] && [ "$OE_TEST" != "no" ] || [ "$LAVA_TEST" == "yes" ]; then
         echo "INHERIT += \"testexport\""
-
-        # Setup target and server IP address
-        echo "TEST_TARGET_IP = \"localhost\""
-        echo "TEST_SERVER_IP = \"localhost\""
-
-        if [ -z "$TEST_SUITES" ]; then
-            echo "TEST_SUITES = \"ping ssh df date scp pam perl python rpm\""
-        else
-            echo "TEST_SUITES = \"$(echo $TEST_SUITES | sed 's/,/\ /g')\""
-        fi
 
         if [ "$OE_TEST" == "with_wrlinux9" ]; then
             # Make sure OE test has python3 library, this is for WRL9
@@ -239,6 +265,33 @@ process_package(){
             echo "IMAGE_INSTALL_append += \"python3-unittest\""
             echo "IMAGE_INSTALL_append += \"python3-multiprocessing\""
         fi
+    fi
+
+    if [ -n "$OE_TEST" ] && [ "$OE_TEST" != "no" ]; then
+        # Setup target and server IP address
+        echo "TEST_TARGET_IP = \"localhost\""
+        echo "TEST_SERVER_IP = \"localhost\""
+
+        if [ -z "$OE_TEST_SUITES" ]; then
+            echo "TEST_SUITES = \"ping ssh df date scp pam perl python rpm\""
+        else
+            echo "TEST_SUITES = \"$(echo $OE_TEST_SUITES | sed 's/,/\ /g')\""
+        fi
+    fi
+
+    if [ "$LAVA_TEST" == "yes" ]; then
+        echo "IMAGE_INSTALL_append += \"rt-tests ltp sysbench iozone3 bonnie++ fwts dmidecode fio busybox\""
+        echo "PNWHITELIST_openembedded-layer += 'sysbench'"
+        echo "PNWHITELIST_openembedded-layer += 'fwts'"
+        echo "PNWHITELIST_openembedded-layer += 'fio'"
+        echo "PNWHITELIST_openembedded-layer += 'busybox'"
+        echo "PNWHITELIST_openembedded-layer += 'numactl'"
+        echo "PREFERRED_PROVIDER_virtual/kernel = 'linux-yocto-rt'"
+
+        echo "LINUX_KERNEL_TYPE = 'preempt-rt'"
+        echo "BB_NO_NETWORK_pn-fwts = '0'"
+        echo "BB_NO_NETWORK_pn-fio = '0'"
+        echo "BB_NO_NETWORK_pn-sysbench = '0'"
     fi
 
     if [ -n "$PREMIRROR_PATH" ]; then
@@ -255,9 +308,7 @@ process_package(){
         echo "MACHINE = \"$MACHINE\""
     fi
 
-    if [ "$SHARED_SSTATE_DIR" == "yes" ]; then
-        echo "SSTATE_DIR = \"$WORKSPACE/../sstate_cache/\""
-    elif [ -n "$SHARED_SSTATE_DIR" ]; then
+    if [ -n "$SHARED_SSTATE_DIR" ]; then
         echo "SSTATE_DIR = \"$WORKSPACE/../$SHARED_SSTATE_DIR/\""
     fi
 } >> "$LOCALCONF"

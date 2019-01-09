@@ -305,7 +305,7 @@ function generate_failmail
     fi
 
     {
-        echo "Subject: [ci-scripts] $SUBJECT"
+        echo "Subject: [wrigel] $SUBJECT"
         echo ""
         echo "Build in $MACHINE $ARCH"
         echo "Branch being built is $BRANCH"
@@ -396,7 +396,7 @@ function generate_failmail
             echo This file, and more detailed log info can be found at:
             echo "$LOGLINK"
             echo "To reproduce this failure with a local docker instance, see wraxl docs:"
-            echo "  http://ala-git.wrs.com/cgi-bin/cgit.cgi/lpd-ops/wr-buildscripts.git/tree/README.md"
+            echo "  http://ala-lxgit.wrs.com/cgi-bin/cgit.cgi/lpd-ops/wr-buildscripts.git/tree/README.md"
             sed -i '/FailBranch:/d' "$STATFILE"
             echo "FailBranch: $FAIL_BRANCH" >> "$STATFILE"
             sed -i '/LogLink:/d' "$STATFILE"
@@ -416,7 +416,7 @@ function generate_successmail() {
     local BRANCH=$(get_stat 'Branch')
     local CONFIGARGS=($(get_stat 'Config'))
     {
-        echo "Subject: [ci-scripts] Build $BUILD_NAME Succeeded."
+        echo "Subject: [wrigel] Build $BUILD_NAME Succeeded."
         echo ""
         echo "Build in $MACHINE $ARCH"
         echo "Branch being built is $BRANCH"
@@ -583,43 +583,46 @@ create_statfile() {
     } >> "$STATFILE"
 }
 
-create_test_statfile() {
+create_report_statfile() {
     local STATFILE=$1
+    local JENKINS_URL=$2
+    local JOB_BASE_NAME=$3
     {
-        echo -e "\nBuild info:"
-        echo "==========="
-        echo "Name: $NAME"
+        echo "{"
+        echo "  \"build_info\": {"
+        echo "    \"local_date\": \"$(date +%Y-%m-%d)\","
+        echo "    \"name\": \"$NAME\","
         if [ -n "$TOOLCHAIN_BRANCH" ]; then
-            echo "Toolchain Branch: $TOOLCHAIN_BRANCH"
+            echo "    \"Toolchain Branch\": \"$TOOLCHAIN_BRANCH\","
         fi
         if [ -n "$BUILD_ID" ]; then
-            echo "build_id: $BUILD_ID"
+            echo "    \"build_id\": \"$BUILD_ID\","
+            if [ -z "$JOB_BASE_NAME" ]; then
+                JOB_BASE_NAME='WRLinux_Build'
+            fi
+            echo "    \"job_console_log\": \""$JENKINS_URL"job/"$JOB_BASE_NAME"/"$BUILD_ID"/console\","
         fi
-        if [ -n "$BUILD_NUM" ]; then
-            echo "build_num: $BUILD_NUM"
-        fi
-        echo -e "\nTest info:"
-        echo "=========="
-        if [ -n "$EMAIL" ]; then
-            echo "Email: $EMAIL"
-        fi
-        echo "Start: $(date) ($(date +%s))"
     } >> "$STATFILE"
 }
 
 function get_wrlinux_version() {
     local BUILD=$1
-    local SETUPLOG=$BUILD/00-wrsetup.log
-    local KEYWORD="Build tools installer version "
+    local DEFAULT_XML="$BUILD/default.xml"
 
-    if [ -f "$SETUPLOG" ]; then
-        local INSTALLER_VER=
-        INSTALLER_VER=$(cat "$SETUPLOG" | grep "$KEYWORD" | sed "s/$KEYWORD//g")
-        if [ -n "$INSTALLER_VER" ]; then
-            IFS='.' read -ra WRL_VER <<< "$INSTALLER_VER"
-            echo "${WRL_VER[0]}"
-        fi
-    fi
+    rev_line=$(cat "$DEFAULT_XML" | grep bitbake | grep revision)
+    REV=$(echo "$rev_line" | grep -o -P '(?<=revision=").*(?=">)')
+
+    case "$REV" in
+        WRLINUX_9*)        wrlinux_ver=9 ;;
+        wr-9.0*)           wrlinux_ver=9 ;;
+        WRLINUX_10_17*)    wrlinux_ver=10.17 ;;
+        wr-10.17*)         wrlinux_ver=10.17 ;;
+        WRLINUX_10_18*)    wrlinux_ver=10.18 ;;
+        wr-10.18*)         wrlinux_ver=10.18 ;;
+        *)                 ;;
+    esac
+
+    echo "$wrlinux_ver"
 }
 
 function detect_built_images() {
@@ -628,7 +631,7 @@ function detect_built_images() {
 
     local WRL_VER=
     WRL_VER=$(get_wrlinux_version "$BUILD")
-    if [ "$WRL_VER" == "10" ]; then
+    if [[ "$WRL_VER" = *"10"* ]]; then
         TMP_DIR=tmp-glibc
     else
         TMP_DIR=tmp

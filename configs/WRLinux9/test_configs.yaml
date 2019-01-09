@@ -1,0 +1,56 @@
+- name: oeqa-default-test
+  prebuild_cmd_for_test:
+  - test_configure.py
+  build_cmd_for_test:
+  - bitbake wrlinux-image-glibc-std -c testexport
+  build_options:
+  - INHERIT += "testexport"
+  - IMAGE_INSTALL_append += "python3-pip"
+  - TEST_TARGET_IP = "localhost"
+  - TEST_SERVER_IP = "localhost"
+  - TEST_SUITES = "ping ssh df date scp pam perl python rpm"
+  lava_test_repo: git://ala-lxgit.wrs.com/lpd-ops/lava-test.git
+  simics:
+    job_template: lava-test/jobs/templates/wrlinux-9/x86_simics_job_oeqa-default-test_template.yaml
+    timeout: 420
+  baytrail_simics:
+    job_template: lava-test/jobs/templates/wrlinux-9/x86_simics_job_oeqa-default-test_template.yaml
+    timeout: 420
+  x86-x58-ich10_simics:
+    job_template: lava-test/jobs/templates/wrlinux-9/x86-x58-ich10_simics_job_oeqa-default-test_template.yaml
+    timeout: 500
+  purley_simics:
+    job_template: lava-test/jobs/templates/wrlinux-9/purley_simics_job_oeqa-default-test_template.yaml
+    timeout: 500
+  hardware:
+    job_template: lava-test/jobs/templates/wrlinux-9/x86_64_job_oeqa-default-test_template.yaml
+    timeout: 420
+  qemu-x86_64:
+    job_template: lava-test/jobs/templates/wrlinux-9/x86_64_qemu_job_oeqa-default-test_template.yaml
+    timeout: 420
+
+- name: linaro-smoke-test
+  prebuild_cmd_for_test:
+  - test_configure.py
+  build_cmd_for_test:
+  build_options:
+  - IMAGE_INSTALL_append += "python3-pip"
+  lava_test_repo: git://ala-lxgit.wrs.com/lpd-ops/lava-test.git
+  simics:
+    job_template: lava-test/jobs/templates/wrlinux-10/x86_simics_job_linaro-smoke-test_template.yaml
+    timeout: 300
+  baytrail_simics:
+    job_template: lava-test/jobs/templates/wrlinux-10/x86_simics_job_linaro-smoke-test_template.yaml
+    timeout: 300
+  x86-x58-ich10_simics:
+    job_template: lava-test/jobs/templates/wrlinux-10/x86-x58-ich10_simics_job_linaro-smoke-test_template.yaml
+    timeout: 500
+  purley_simics:
+    job_template: lava-test/jobs/templates/wrlinux-10/purley_simics_job_linaro-smoke-test_template.yaml
+    timeout: 500
+  hardware:
+    job_template: lava-test/jobs/templates/wrlinux-10/x86_64_job_linaro-smoke-test_template.yaml
+    timeout: 300
+  qemu-x86_64:
+    job_template: lava-test/jobs/templates/wrlinux-10/x86_64_qemu_job_lava-smoke-test_template.yaml
+    timeout: 300

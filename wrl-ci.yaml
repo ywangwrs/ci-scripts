@@ -32,7 +32,9 @@ services:
         -Dorg.jenkinsci.remoting.engine.JnlpProtocol3.disabled=true
       JENKINS_OPTS: '--httpPort=8080 --httpListenAddress=0.0.0.0 --prefix=/jenkins'
       JENKINS_UI_URL: "https://$HOST/jenkins/"
-      JENKINS_AGENT_PASSWORD : "${JENKINS_AGENT_PASSWORD}"
+      JENKINS_AGENT_PASSWORD: "${JENKINS_AGENT_PASSWORD}"
+      JENKINS_MASTER_NUM_EXECUTORS: "${JENKINS_MASTER_NUM_EXECUTORS:-0}"
+      JENKINS_INIT_DEBUG: "${JENKINS_INIT_DEBUG}"
     deploy:
       replicas: 1
       placement:
@@ -42,13 +44,11 @@ services:
       - net
     volumes:
       - jenkins_home:/var/jenkins_home
-      - type: tmpfs
-        target: /tmp
     secrets:
       - agent_password
 
   rproxy:
-    image: blacklabelops/nginx:${RPROXY_TAG:-latest}
+    image: windriver/nginx:${RPROXY_TAG:-latest}
     deploy:
       replicas: 1
       placement:
@@ -75,7 +75,7 @@ services:
       SERVER1REVERSE_PROXY_DIRECTIVE4FIELD1: 'alias /var/lib/nginx/html/jenkins_home/auth/'
       SERVER1REVERSE_PROXY_DIRECTIVE4FIELD2: 'autoindex on'
       NGINX_REDIRECT_PORT80: "true"
-      SERVER1CERTIFICATE_DNAME: "/CN=WindRiver/OU=Linux/O=windriver.com/L=Alameda/C=US"
+      SERVER1CERTIFICATE_DNAME: "/CN=*.wrs.com/OU=Linux/O=Windriver/L=Alameda/C=US/emailAddress=root@localhost"
       DISABLE_ACCESS_LOG: "true"
       LOG_LEVEL: "warn"
     networks:
@@ -85,11 +85,9 @@ services:
       # Volume avoids recreating certs on every run
       - rproxy_nginx_config:/etc/nginx/keys
       # expose the rsync server contents over https
-      - rsync_builds:/var/lib/nginx/html/builds/:ro
+      - /opt/rsync:/var/lib/nginx/html/builds/:ro
       # expose the jenkins auth content over https
       - jenkins_home:/var/lib/nginx/html/jenkins_home/:ro
-      - type: tmpfs
-        target: /tmp
 
   client:
     image: ${REGISTRY:-windriver}/jenkins-swarm-client:${JENKINS_AGENT_TAG:-latest}
@@ -101,7 +99,7 @@ services:
     depends_on:
       - jenkins
     environment:
-      COMMAND_OPTIONS: "-master http://jenkins:8080/jenkins -disableSslVerification -labels 'docker' -executors 2"
+      COMMAND_OPTIONS: "-master http://jenkins:8080/jenkins -disableSslVerification -labels 'docker' -executors ${JENKINS_AGENT_NUM_EXECUTORS:-2}"
       SWARM_DELAYED_START: "15"
       SWARM_AGENT_PASSWORD: "${JENKINS_AGENT_PASSWORD}"
     networks:
@@ -113,30 +111,20 @@ services:
       - jenkins_agent:/home/jenkins
       - /etc/hostname:/etc/hostname
       - /etc/localtime:/etc/localtime
-      - type: tmpfs
-        target: /tmp
     secrets:
       - agent_password
 
   consul:
-    image: consul:${CONSUL_TAG:-0.9.3}
+    image: consul:${CONSUL_TAG:-1.2.0}
     deploy:
       replicas: 1
       placement:
         constraints:
           - "node.labels.type == master"
     environment:
-      - "CONSUL_LOCAL_CONFIG={\"disable_update_check\": true}"
-      - "CONSUL_BIND_INTERFACE=eth0"
-      - "CONSUL_HTTP_ADDR=0.0.0.0"
-    entrypoint:
-      - consul
-      - agent
-      - -server
-      - -bootstrap-expect=1
-      - -data-dir=/tmp/consuldata
-      - -bind={{ GetInterfaceIP "eth0" }}
-      - -client=0.0.0.0
+      CONSUL_LOCAL_CONFIG: '{"disable_update_check": true}'
+      CONSUL_BIND_INTERFACE: "eth0"
+    command: "consul agent -server -bootstrap-expect=1 -data-dir=/tmp/consuldata -config-dir=/consul/config -client=0.0.0.0"
     networks:
       - net
     volumes:
@@ -182,13 +170,12 @@ services:
     networks:
       - rsync_net
     volumes:
-      - rsync_builds:/builds
+      - /opt/rsync:/builds
 
 volumes:
   jenkins_home:
   jenkins_agent:
   rproxy_nginx_config:
-  rsync_builds:
 
 secrets:
   agent_password:

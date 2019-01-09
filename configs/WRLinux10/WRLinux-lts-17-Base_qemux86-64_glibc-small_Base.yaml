@@ -24,7 +24,7 @@ system:
   # Jenkins Job name.
   # Default: WRLinux_Build
   job: WRLinux_Build
-  # The Docker registry to pull images from. 
+  # The Docker registry to pull images from.
   # Default: windriver
   registry: windriver
   # Specify the file path for jenkins authentication infomation
@@ -35,12 +35,12 @@ system:
   # Specify the credential id when git_credential is enabled.
   # Default: git
   git_credential_id: git
-  # The network switch for network access. Only three options allowed: 
+  # The network switch for network access. Only three options allowed:
   # Default: bridge (with network access) or
   # overlay (docker swarm mode) or
   # none (without network).
   network: bridge
-  # The switch for using toaster in build. Only two options allowed: 
+  # The switch for using toaster in build. Only two options allowed:
   # enable (with toaster) and disable (without toaster).
   # Default: enable.
   toaster: enable
@@ -64,7 +64,7 @@ layerindex_overrides:
     # Override the branch defined in the combos file.
     # Default: the same as 'branch' set in 'build' section
     branch: WRLINUX_LTS_17_BASE
-    # Specify the layer vcs_url to used with a Devbuild. If not specified the 
+    # Specify the layer vcs_url to used with a Devbuild. If not specified the
     # vcs_url will not be changed.
     layer_vcs_url: https://github.com/WindRiver-Labs/meta-intel
     # Specify the branch to be used with on the modified layer for a Devbuild.
@@ -74,11 +74,11 @@ layerindex_overrides:
     layer_vcs_subdir:
 
   # Specify a layer name to be modified as part of a Devbuild.
-  - layer_name: 
+  - layer_name:
     # Override the branch defined in the combos file.
     # Default: the same as 'branch' set in 'build' section
     branch: WRLINUX_LTS_17_BASE
-    # Specify the layer vcs_url to used with a Devbuild. If not specified the 
+    # Specify the layer vcs_url to used with a Devbuild. If not specified the
     # vcs_url will not be changed.
     layer_vcs_url: git://git.wrs.com/layers/meta-openembedded
     # Specify the branch to be used with on the modified layer for a Devbuild.
@@ -88,7 +88,7 @@ layerindex_overrides:
     layer_vcs_subdir:
 
 build:
-  # The Docker image used for the build. 
+  # The Docker image used for the build.
   # Default: ubuntu1604_64.
   image: ubuntu1604_64
   # Name of file that contains valid build configurations.
@@ -115,25 +115,24 @@ post_build:
   # The Docker image used for the post process stage.
   # Default: postbuild
   post_process_image: postbuild
-  # list of args in form KEY: VAL that will be injected into 
+  # list of args in form KEY: VAL that will be injected into
   # post process script environment.
   # Default: ''
   postprocess_args:
     RSYNC_SERVER: 192.168.2.18
     RSYNC_DEST_DIR: builds/wrlinux10
-    SMTPSERVER: 
-    OE_TEST: no
+    SMTPSERVER:
     #- EMAIL: 'user1@windriver.com user2@xxx.com'
     EMAIL: ywangwrs@gmail.com
   # list of scripts in the scripts/ directory to be run after
-  # a successful build. 
+  # a successful build.
   # Default: rsync,cleanup.
   post_success:
     - rsync
     - cleanup
     - send_mail
   # list of scripts in the scripts/ directory to be run after
-  # a failed build. 
+  # a failed build.
   # Default: cleanup,send_email
   post_fail:
     - rsync
@@ -141,35 +140,34 @@ post_build:
     - send_mail
 
 test_config:
-  # Switch to enable runtime testing of the build. Only two options supported: 
-  # enable (run tests) or disable. 
+  # Switch to enable runtime testing of the build. Only two options supported:
+  # enable (run tests) or disable.
   # Default: disable
   test: disable
-  # The Docker image used for the test stage. 
+  # The Docker image used for the test stage.
   # Default: postbuild
   test_image: postbuild
-  # list of args in form KEY: VAL that will be injected into 
+  # list of args in form KEY: VAL that will be injected into
   # test and post test script environment.
-  test_args: 
+  test_args:
     LAVA_SERVER: yow-lpdtest.wrs.com:8080
     LAVA_USER: lpdtest
     NFS_ROOT: /net/yow-lpdtest/var/lib/tftpboot
-    HTTP_ROOT: http://128.224.56.215/tftpboot
+    HTTP_ROOT: http://yow-lpdtest.wrs.com/tftpboot
     TEST_DEVICE: simics
-    TEST_SUITE: oeqa-default-test
     RETRY: 1
 
 post_test:
-  # The Docker image used for the post test stage. 
+  # The Docker image used for the post test stage.
   # Default: postbuild
   post_test_image: postbuild
   # list of scripts in the scripts/ directory to be run after
-  # a successful test. 
+  # a successful test.
   # Default: none
   post_test_success:
     - send_mail
   # list of scripts in the scripts/ directory to be run after
-  # a successful test. 
+  # a successful test.
   # Default: none
   post_test_fail:
     - send_mail

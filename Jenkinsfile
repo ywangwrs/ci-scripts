@@ -37,7 +37,7 @@ node('docker') {
   // Node name is from docker swarm is hostname + dash + random string. Remove random part of recover hostname
   def hostname = "${NODE_NAME}"
   hostname = hostname[0..-10]
-  def common_docker_params = "--rm --name build-${BUILD_ID} --hostname ${hostname} -i --tmpfs /tmp --tmpfs /var/tmp -v /etc/localtime:/etc/localtime:ro -u 1000 -v ci_jenkins_agent:/home/jenkins "
+  def common_docker_params = "--rm --name build-${BUILD_ID} --hostname ${hostname} -i --tmpfs /tmp --tmpfs /var/tmp -v /etc/localtime:/etc/localtime:ro -u 1000 -v ci_jenkins_agent:/home/jenkins --ulimit nofile=1024:1024 "
   common_env_args = ["LANG=en_US.UTF-8", "BUILD_ID=${BUILD_ID}", "WORKSPACE=${WORKSPACE}", "JENKINS_URL=${JENKINS_URL}" ]
   common_docker_params = add_env( common_docker_params, common_env_args )
 
@@ -53,7 +53,7 @@ node('docker') {
       git(url:params.CI_REPO, branch:params.CI_BRANCH)
     }
 
-    def env_args = ["BASE=${WORKSPACE}", "REMOTE=${REMOTE}"]
+    def env_args = ["BASE=${WORKSPACE}/..", "REMOTE=${REMOTE}"]
     def docker_params = add_env( common_docker_params, env_args )
     if (params.GIT_CREDENTIAL == "enable") {
       withCredentials([[$class: 'UsernamePasswordMultiBinding', credentialsId:"${GIT_CREDENTIAL_ID}", usernameVariable: 'USERNAME', passwordVariable: 'PASSWORD']]) {
@@ -70,49 +70,65 @@ node('docker') {
     }
   }
 
-  try {
-    stage('Layerindex Setup') {
-      // if devbuilds are enabled, start build in same network as layerindex
-      if (params.DEVBUILD_ARGS != "") {
-        dir('ci-scripts') {
-          git(url:params.CI_REPO, branch:params.CI_BRANCH)
-        }
-        devbuild_args = params.DEVBUILD_ARGS.tokenize(',')
-        devbuild_args = devbuild_args + ["LAYERINDEX_SOURCE=${LAYERINDEX_SOURCE}"]
-        devbuild_args = devbuild_args + ["BITBAKE_REPO_URL=${BITBAKE_REPO_URL}"]
-        withEnv(devbuild_args) {
-          dir('ci-scripts/layerindex') {
-            sh "printenv"
+  stage('Layerindex Setup') {
+    // if devbuilds are enabled, start build in same network as layerindex
+    if (params.DEVBUILD_ARGS != "") {
+      dir('ci-scripts') {
+        git(url:params.CI_REPO, branch:params.CI_BRANCH)
+      }
+      devbuild = readYaml text: params.DEVBUILD_ARGS
+      devbuild_env = ["LAYERINDEX_SOURCE=${LAYERINDEX_SOURCE}"]
+      devbuild_env = devbuild_env + ["BITBAKE_REPO_URL=${BITBAKE_REPO_URL}"]
+      withEnv(devbuild_env) {
+        dir('ci-scripts/layerindex') {
+          try {
             sh "./layerindex_start.sh --type=${LAYERINDEX_TYPE}"
-            sh "./layerindex_layer_update.sh"
+            for ( repo in devbuild.repos ) {
+              for ( layer in repo.layers ) {
+                layer_args = [
+                  "DEVBUILD_LAYER_NAME=${layer}",
+                  "DEVBUILD_LAYER_VCS_URL=${repo.repo}",
+                  "DEVBUILD_LAYER_ACTUAL_BRANCH=${repo.branch}"]
+                if (!repo.repo.endsWith(layer)) {
+                  layer_args = layer_args + ["DEVBUILD_LAYER_VCS_SUBDIR=${layer}"]
+                }
+                withEnv(layer_args) {
+                  sh "./layerindex_layer_update.sh"
+                }
+              }
+            }
+            sh "./layerindex_export.sh --branch=${BRANCH}"
+            sh "mv -f layerindex.json ${WORKSPACE}"
+          } finally {
+            sh "./layerindex_stop.sh"
           }
         }
       }
-      else {
-        println("Not starting local LayerIndex")
-      }
     }
+    else {
+      println("Not starting local LayerIndex")
+    }
+  }
 
+  try {
     stage('Build') {
       dir('ci-scripts') {
         git(url:params.CI_REPO, branch:params.CI_BRANCH)
       }
 
       def docker_params = common_docker_params
-      def env_args = ["MESOS_TASK_ID=${BUILD_ID}", "BASE=${WORKSPACE}"]
+      def env_args = ["MESOS_TASK_ID=${BUILD_ID}", "BASE=${WORKSPACE}", "REMOTE=${REMOTE}"]
       if (params.TOASTER == "enable") {
         docker_params = docker_params + ' --expose=8800 -P '
         env_args = env_args + ["SERVICE_NAME=toaster", "SERVICE_CHECK_HTTP=/health"]
       }
 
-      if (params.DEVBUILD_ARGS != "") {
-        docker_params = docker_params + ' --network=build${BUILD_ID}_default'
-        env_args = env_args + params.DEVBUILD_ARGS.tokenize(',')
-      }
-
       env_args = env_args + ["NAME=${NAME}", "BRANCH=${BRANCH}"]
       env_args = env_args + ["NODE_NAME=${NODE_NAME}", "SETUP_ARGS=\'${SETUP_ARGS}\'"]
-      env_args = env_args + ["PREBUILD_CMD=\'${PREBUILD_CMD}\'", "BUILD_CMD=\'${BUILD_CMD}\'", "TOASTER=${TOASTER}"]
+      env_args = env_args + ["PREBUILD_CMD=\'${PREBUILD_CMD}\'", "PREBUILD_CMD_FOR_TEST=\'${PREBUILD_CMD_FOR_TEST}\'"]
+      env_args = env_args + ["TEST=${TEST}", "TEST_CONFIGS_FILE=${TEST_CONFIGS_FILE}"]
+      env_args = env_args + ["BUILD_CMD=\'${BUILD_CMD}\'", "TOASTER=${TOASTER}"]
+      env_args = env_args + ["BUILD_CMD_FOR_TEST=\'${BUILD_CMD_FOR_TEST}\'"]
       docker_params = add_env( docker_params, env_args )
       def cmd="${WORKSPACE}/ci-scripts/jenkins_build.sh"
 
@@ -132,27 +148,13 @@ node('docker') {
       }
     }
   } finally {
-    stage('Layerindex Cleanup') {
-      if (params.DEVBUILD_ARGS != "") {
-        dir('ci-scripts') {
-          git(url:params.CI_REPO, branch:params.CI_BRANCH)
-        }
-        dir('ci-scripts/layerindex') {
-          sh "./layerindex_stop.sh"
-        }
-      }
-      else {
-        println("No LayerIndex Cleanup necessary")
-      }
-    }
-  
     stage('Post Process') {
       dir('ci-scripts') {
         git(url:params.CI_REPO, branch:params.CI_BRANCH)
       }
       def docker_params = common_docker_params + " --network=rsync_net "
       def env_args = ["NAME=${NAME}"]
-      env_args = env_args + ["POST_SUCCESS=${POST_SUCCESS}", "POST_FAIL=${POST_FAIL}"]
+      env_args = env_args + ["POST_SUCCESS=${POST_SUCCESS}", "POST_FAIL=${POST_FAIL}", "TEST=" + params.TEST]
       env_args = env_args + params.POSTPROCESS_ARGS.tokenize(',')
       docker_params = add_env( docker_params, env_args )
       def cmd="${WORKSPACE}/ci-scripts/build_postprocess.sh"
@@ -162,24 +164,25 @@ node('docker') {
 
   try {
     stage('Test') {
-      if (params.TEST == 'enable') {
+      if (params.TEST != 'disable' && params.TEST != '') {
         dir('ci-scripts') {
           git(url:params.CI_REPO, branch:params.CI_BRANCH)
         }
         def docker_params = common_docker_params
         def env_args = ["NAME=${NAME}"]
+        env_args = env_args + ["TEST=" + params.TEST, "RUNTIME_TEST_CMD=\'${RUNTIME_TEST_CMD}\'"]
         env_args = env_args + params.TEST_ARGS.tokenize(',')
         env_args = env_args + params.POSTPROCESS_ARGS.tokenize(',')
         docker_params = add_env( docker_params, env_args )
-        def cmd="${WORKSPACE}/ci-scripts/run_tests.sh"
+        def cmd="${WORKSPACE}/ci-scripts/${RUNTIME_TEST_CMD}"
         sh "docker run --init ${docker_params} ${REGISTRY}/${TEST_IMAGE} ${cmd}"
       } else {
-        println("Test disabled")
+        println("Test is disabled, ignore 'Test' stage.")
       }
     }
   } finally {
     stage('Post Test') {
-      if (params.TEST == 'enable') {
+      if (params.TEST != 'disable' && params.TEST != '') {
         dir('ci-scripts') {
           git(url:params.CI_REPO, branch:params.CI_BRANCH)
         }
@@ -192,7 +195,7 @@ node('docker') {
         def cmd="${WORKSPACE}/ci-scripts/test_postprocess.sh"
         sh "docker run --init ${docker_params} ${REGISTRY}/${POST_TEST_IMAGE} ${cmd}"
       } else {
-        println("Test disabled")
+        println("Test is disabled, ignore 'Post Test' stage.")
       }
     }
   }

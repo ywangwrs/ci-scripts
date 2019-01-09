@@ -6,7 +6,7 @@ import hudson.security.csrf.DefaultCrumbIssuer
 import jenkins.security.s2m.AdminWhitelistRule
 /**
  * This is the groovy script to enable global security in Jenkins-master
- * Major aim of jenkins security is to ensure only oe_jenkins_build.py can submit build jobs to jenkins
+ * Major aim of jenkins security is to ensure only jenkins_job_submit.py can submit build jobs to jenkins
  *
  * This script applies matrix authority strategy to authorize three users for different authorities
  * Administrator user has the authority to all operations in jenkins
@@ -29,9 +29,13 @@ def alphabet = (('a'..'z')+('0'..'9')).join()
 String adminUser = 'admin'
 def adminPassword = randomStringGenerator(alphabet, 10)
 
-if (System.env.JENKINS_INIT_DEBUG) {
+if (System.env.JENKINS_INIT_DEBUG == "true") {
     println("Admin password: ${adminPassword}")
 }
+
+// Create a build user for triggering builds
+String buildUser = 'build'
+String buildPassword = randomStringGenerator(alphabet, 10)
 
 String agentUser = 'agent'
 String agentPassword = randomStringGenerator(alphabet, 10)
@@ -51,6 +55,7 @@ def instance = Jenkins.getInstance()
 // Set up admin & agent accounts to jenkins
 def hudsonRealm = new HudsonPrivateSecurityRealm(false)
 hudsonRealm.createAccount(adminUser, adminPassword)
+hudsonRealm.createAccount(buildUser, buildPassword)
 hudsonRealm.createAccount(agentUser, agentPassword)
 instance.setSecurityRealm(hudsonRealm)
 
@@ -60,15 +65,18 @@ globalStrategy.add(Jenkins.ADMINISTER, adminUser)
 
 // full access for authenticated users
 globalStrategy.add(Jenkins.READ, 'authenticated')
+globalStrategy.add(Item.BUILD, 'authenticated')
 globalStrategy.add(Item.READ, 'authenticated')
-globalStrategy.add(Item.DISCOVER, 'authenticated')
-globalStrategy.add(Item.CANCEL, 'authenticated')
 globalStrategy.add(Item.CREATE, 'authenticated')
 globalStrategy.add(Item.DELETE, 'authenticated')
+globalStrategy.add(Item.DISCOVER, 'authenticated')
+globalStrategy.add(Item.CANCEL, 'authenticated')
+globalStrategy.add(Computer.BUILD, 'authenticated')
 
-// read only access for anonymous users
+// read only access and ability to cancel running jobs for anonymous users
 globalStrategy.add(Jenkins.READ,'anonymous')
 globalStrategy.add(Item.READ, 'anonymous')
+globalStrategy.add(Item.CANCEL, 'anonymous')
 
 // agent user can only manage agents
 globalStrategy.add(Computer.BUILD, agentUser)
@@ -92,19 +100,25 @@ instance.getInjector().getInstance(AdminWhitelistRule.class).setMasterKillSwitch
 instance.save()
 
 // Output API key to a shared file bind mount to rproxy
-// oe_jenkins_build.py uses this API key to set up security connection and submit jobs
+// jenkins_job_submit.py uses this API key to set up security connection and submit jobs
 def env = System.getenv()
 def authPath = new File("/var/jenkins_home/auth/")
 if (!authPath.exists()) {
     authPath.mkdirs()
 }
-def authFile = new File("/var/jenkins_home/auth/jenkins_auth.txt")
-if (authFile.exists()) {
-    authFile.delete()
+
+def setupAuthFile(String userName, String fileName) {
+    def authFile = new File(fileName)
+    if (authFile.exists()) {
+        authFile.delete()
+    }
+    User user = User.get(userName)
+    ApiTokenProperty tokenProperty = user.getProperty(ApiTokenProperty.class)
+    ApiTokenStore.TokenUuidAndPlainValue tokenUuidAndPlainValue = tokenProperty.tokenStore.generateNewToken(token);
+    authFile << userName
+    authFile << ":"
+    authFile << tokenUuidAndPlainValue.plainValue
 }
-User user = User.get(adminUser)
-ApiTokenProperty token = user.getProperty(ApiTokenProperty.class)
-def apiToken = token.getApiToken()
-authFile << adminUser
-authFile << ":"
-authFile << "${apiToken}"
+
+setupAuthFile(adminUser, "/var/jenkins_home/auth/jenkins_auth.txt")
+setupAuthFile(buildUser, "/var/jenkins_home/auth/build_auth.txt")

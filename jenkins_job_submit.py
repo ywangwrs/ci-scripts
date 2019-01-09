@@ -20,6 +20,9 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
+# To ignore no-member pylint errors:
+#     pylint: disable=E1101
+
 import os
 import re
 import sys
@@ -27,6 +30,7 @@ import ssl
 import requests
 import yaml
 import jenkins
+import git
 
 if hasattr(ssl, '_create_unverified_context'):
     ssl._create_default_https_context = ssl._create_unverified_context
@@ -52,6 +56,7 @@ def fetch_auth_from_local_file(jenkins_auth_file):
                 print("Local auth file empty.")
                 return None
             local_auth = re.split(r'[:,;\s]\s*', auth_content)
+            print(local_auth)
             if len(local_auth) != 2:
                 print("Local auth file format invalid.")
                 return None
@@ -148,6 +153,9 @@ def create_parser():
                     help='Comma separated list of builds as specified in build_configs_file.'
                     'Use all to queue all the configs.')
 
+    op.add_argument('--test_configs_file', dest='test_configs_file', required=False,
+                    help='Name of file that contains run-time test configurations.')
+
     op.add_argument("--image", dest="image", required=False,
                     help="The Docker image used for the build. \nDefault: ubuntu1604_64.")
 
@@ -216,9 +224,8 @@ def create_parser():
                     "Default: git://git.openembedded.org/bitbake")
 
     op.add_argument("--test", dest="test", required=False,
-                    choices=['enable', 'disable'],
-                    help="Switch to enable runtime testing of the build.\n"
-                    "Only two options supported: enable (run tests) or disable. Default: disable")
+                    help="Switch to specific test suite name, such as oeqa-default-test \n"
+                    "to enable runtime testing of the build. Default: disable")
 
     op.add_argument("--test_image", dest="test_image", required=False,
                     help="The Docker image used for the test stage.\n"
@@ -252,41 +259,45 @@ def create_parser():
 
     return op
 
+
 def replace_dict_key(dic):
     """ Handle environment variables for devbuild_argsa """
     dict_var_names = {
-        'branch'              : 'DEVBUILD_BRANCH',
-        'layer_name'          : 'DEVBUILD_LAYER_NAME',
-        'layer_vcs_url'       : 'DEVBUILD_LAYER_VCS_URL',
-        'layer_actual_branch' : 'DEVBUILD_LAYER_ACTUAL_BRANCH',
-        'layer_vcs_subdir'    : 'DEVBUILD_LAYER_VCS_SUBDIR',
+        'branch'             : 'DEVBUILD_BRANCH',
+        'layer_name'         : 'DEVBUILD_LAYER_NAME',
+        'layer_vcs_url'      : 'DEVBUILD_LAYER_VCS_URL',
+        'layer_actual_branch': 'DEVBUILD_LAYER_ACTUAL_BRANCH',
+        'layer_vcs_subdir'   : 'DEVBUILD_LAYER_VCS_SUBDIR',
     }
 
+    newdict={}
     for key, value in dic.items():
         if key in dict_var_names:
-            dic[dict_var_names[key]] = dic.pop(key)
+            newdict[dict_var_names[key]] = value
     for key, value in dic.items():
         if value is None:
-            dic[key] = ''
+            newdict[key] = ''
 
-    return dic
+    return newdict
+
 
 def parse_configs_from_yaml(configs_file):
     """
     This function is used to get all the options from a configuration file:
-    configs/oe_jenkins_build.yaml
+    configs/jenkins_job_configs.yaml
     """
     class Opts(dict):
         """ This class will be used to collect all the options. """
         pass
 
-    setattr_without_none = lambda obj, attr, value: \
+    def setattr_without_none(obj, attr, value):
         setattr(obj, attr, '' if value is None else value)
-    dict2list = lambda dict: \
-        [(str(k) + '=' + (str(v) if v is not None else '')) for k, v in dict.items()]
+
+    def dict2list(d):
+        return [(str(k) + '=' + (str(v) if v is not None else '')) for k, v in d.items()]
 
     if configs_file is None:
-        configs_file = 'configs/oe_jenkins_build.yaml'
+        configs_file = 'wrigel-configs/jenkins_job_configs.yaml'
 
     with open(configs_file) as yaml_configs_file:
 
@@ -313,7 +324,7 @@ def parse_configs_from_yaml(configs_file):
                             # TODO: we will support multiple layers in devbuild_args, currently
                             # devbuild_args is set to the first layer with its layer_name is defined
                             if layer_id == 1:
-                                setattr(Opts, 'devbuild_args', \
+                                setattr(Opts, 'devbuild_args',
                                         ','.join(dict2list(replace_dict_key(section_cfgs))))
                         else:
                             print("WARNING - no layer_name: " + str(section_cfgs))
@@ -330,12 +341,18 @@ def parse_configs_from_yaml(configs_file):
 
     return Opts
 
+
 def main():
     """Main"""
     # Common functions
-    get_attr_list = lambda d: [attr for attr in d.__dict__.keys() if not attr.startswith("__")]
-    num_spaces = lambda word, fixed_length: fixed_length - len(word)
-    dict2list = lambda dict: [(str(k) + '=' + str(v)) for k, v in dict.items()]
+    def get_attr_list(d):
+        return [attr for attr in d.__dict__.keys() if not attr.startswith("__")]
+
+    def num_spaces(word, fixed_length):
+        return fixed_length - len(word)
+
+    def dict2list(d):
+        return [(str(k) + '=' + str(v)) for k, v in d.items()]
 
     # Get options from command line
     parser = create_parser()
@@ -343,6 +360,15 @@ def main():
 
     cml_opts_attr_list = get_attr_list(cml_opts)
     cml_opts_attr_list.sort()
+
+    # Check existence of wrigel-configs repo
+    #if not os.path.exists("wrigel-configs"):
+    #    print("wrigel-configs repo does NOT exist, clone it.")
+    #    git.Git(".").clone("git://ala-lxgit.wrs.com/git/projects/wrlinux-ci/wrigel-configs.git")
+    #else:
+    #    print("wrigel-configs repo exists, pull latest changes.")
+    #    wrigel_configs = git.cmd.Git("wrigel-configs")
+    #    wrigel_configs.pull()
 
     # Get options from YAML configuration file
     opts = parse_configs_from_yaml(cml_opts.configs_file)
@@ -367,13 +393,14 @@ def main():
                     for key, val in cml_value_in_dict.items():
                         if key in yaml_value_key_list:
                             yaml_value_in_dict[key] = val
+                            if key == 'TEST_DEVICE':
+                                test_device = val
 
                     setattr(opts, attr, ','.join(dict2list(yaml_value_in_dict)))
                 else:
                     setattr(opts, attr, cml_value)
             else:
                 print("WARNING: ", attr, "is not a known option in YAML config file!")
-            #print(attr, ' ' * num_spaces(attr, 18), '=', getattr(cml_opts,attr))
 
     print("============ Options after override ============")
     for attr in opts_attr_list:
@@ -410,6 +437,7 @@ def main():
             server = jenkins.Jenkins(jenkins_url)
         else:
             server = jenkins.Jenkins(jenkins_url, username=jenkins_auth[0], password=jenkins_auth[1])
+        server._session.verify = False
     except jenkins.JenkinsException:
         print("Connection to Jenkins server %s failed." % jenkins_url)
         sys.exit(1)
@@ -422,6 +450,7 @@ def main():
         with open(job_config) as job_config_file:
             xml_config = job_config_file.read()
             if opts.ci_branch != 'master':
+                # replace branch in xml definition of job
                 import xml.etree.ElementTree as ET
                 root = ET.fromstring(xml_config)
                 branches = root.find('definition').find('scm').find('branches')
@@ -429,6 +458,7 @@ def main():
                 branch.text = '*/' + opts.ci_branch
                 xml_config = ET.tostring(root, encoding="unicode")
             if opts.ci_repo:
+                # replace git repo in xml definition of job
                 import xml.etree.ElementTree as ET
                 root = ET.fromstring(xml_config)
                 ci_repos = root.find('definition').find('scm').find('userRemoteConfigs')
@@ -447,9 +477,9 @@ def main():
         if configs is None:
             sys.exit(1)
 
-        configs_to_run = opts.build_configs.split(',')
+        configs_to_build = opts.build_configs.split(',')
         for config in configs:
-            if opts.build_configs == 'all' or config['name'] in configs_to_run:
+            if opts.build_configs == 'all' or config['name'] in configs_to_build:
 
                 print("Generating command for config %s" % config['name'])
 
@@ -458,6 +488,33 @@ def main():
                     branch = opts.branch
 
                 next_build_number = server.get_job_info(opts.job)['nextBuildNumber']
+
+                prebuild_cmd_for_test = 'null'
+                build_cmd_for_test = ''
+                runtime_test_cmd = 'null'
+                if opts.test != 'disable' and opts.test != '' and opts.test is not None:
+                    with open(opts.test_configs_file) as test_configs_file:
+                        test_configs = yaml.load(test_configs_file)
+                        if test_configs is None:
+                            print('ERROR: Test is enabled but test configs file is empty.')
+                            sys.exit(1)
+
+                    #TODO: currently only run one test in test_configs
+                    for test_config in test_configs:
+                        if test_config['name'] == opts.test:
+                            print('Test is enabled and test suite is set to ' + opts.test)
+                            prebuild_cmd_for_test = ' '.join(test_config['prebuild_cmd_for_test'])
+
+                            if test_config['build_cmd_for_test'] is not None:
+                                build_cmd_for_test = ' '.join(test_config['build_cmd_for_test'])
+
+                            runtime_test_cmd = 'run_tests.sh' \
+                                               + ' ' + test_config['lava_test_repo'] \
+                                               + ' ' + test_config[test_device]['job_template'] \
+                                               + ' ' + str(test_config[test_device]['timeout'])
+
+                if prebuild_cmd_for_test == 'null':
+                    print('Test is disabled.')
 
                 output = server.build_job(opts.job,
                                           {'NAME': config['name'],
@@ -468,7 +525,9 @@ def main():
                                            'REMOTE': opts.remote,
                                            'SETUP_ARGS': ' '.join(config['setup']),
                                            'PREBUILD_CMD': ' '.join(config['prebuild']),
+                                           'PREBUILD_CMD_FOR_TEST': prebuild_cmd_for_test,
                                            'BUILD_CMD': ' '.join(config['build']),
+                                           'BUILD_CMD_FOR_TEST': build_cmd_for_test,
                                            'REGISTRY': opts.registry,
                                            'POSTPROCESS_IMAGE': opts.post_process_image,
                                            'POSTPROCESS_ARGS': opts.postprocess_args,
@@ -478,11 +537,12 @@ def main():
                                            'TOASTER': opts.toaster,
                                            'GIT_CREDENTIAL': opts.git_credential,
                                            'GIT_CREDENTIAL_ID': opts.git_credential_id,
-                                           'DEVBUILD_ARGS': opts.devbuild_args,
                                            'LAYERINDEX_TYPE': opts.layerindex_type,
                                            'LAYERINDEX_SOURCE': opts.layerindex_source,
                                            'BITBAKE_REPO_URL': opts.bitbake_repo_url,
                                            'TEST': opts.test,
+                                           'TEST_CONFIGS_FILE': opts.test_configs_file,
+                                           'RUNTIME_TEST_CMD': runtime_test_cmd,
                                            'TEST_IMAGE': opts.test_image,
                                            'TEST_ARGS': opts.test_args,
                                            'POST_TEST_IMAGE': opts.post_test_image,
@@ -492,7 +552,7 @@ def main():
 
                 print("Scheduled build " + str(next_build_number))
                 if output:
-                    print("Jenkins Output:" + output)
+                    print("Jenkins Output:" + str(output))
 
 
 if __name__ == "__main__":
