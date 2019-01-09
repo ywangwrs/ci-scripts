@@ -393,8 +393,6 @@ def main():
                     for key, val in cml_value_in_dict.items():
                         if key in yaml_value_key_list:
                             yaml_value_in_dict[key] = val
-                            if key == 'TEST_DEVICE':
-                                test_device = val
 
                     setattr(opts, attr, ','.join(dict2list(yaml_value_in_dict)))
                 else:
@@ -507,6 +505,13 @@ def main():
 
                             if test_config['build_cmd_for_test'] is not None:
                                 build_cmd_for_test = ' '.join(test_config['build_cmd_for_test'])
+
+                            # get test_device from opts
+                            yaml_value = getattr(opts, 'test_args')
+                            yaml_value_in_dict = dict(item.split("=") for item in yaml_value.split(","))
+                            for key, val in yaml_value_in_dict.items():
+                                if key == 'TEST_DEVICE':
+                                    test_device = val
 
                             runtime_test_cmd = 'run_tests.sh' \
                                                + ' ' + test_config['lava_test_repo'] \
