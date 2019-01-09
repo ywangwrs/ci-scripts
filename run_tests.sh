@@ -196,7 +196,7 @@ fi
 
 # Find kernel file name
 pushd "$BUILD/rsync/$NAME"
-if [ "$TEST_DEVICE" == "mxe5400-qemu-ppc" ] || [ "$TEST_DEVICE" == "mxe5400-qemu-mips64" ]; then
+if [ "$TEST_DEVICE" == "aws-ec2_qemu-ppc" ] || [ "$TEST_DEVICE" == "aws-ec2_qemu-mips64" ]; then
     KERNEL_FILE=$(ls ./vmlinux)
 else
     KERNEL_FILE=$(ls ./*Image)
@@ -239,9 +239,9 @@ elif [[ "$TEST_DEVICE" == "qemu-x86_64" ]]; then
             s@HDD_IMG@${FILE_LINK}\/${IMAGE_NAME}.hddimg@g; \
             s@INITRD_IMG@${FILE_LINK}\/${INITRAMFS_NAME}@g" "$TEST_JOB"
 elif [[ "$TEST_DEVICE" == *"qemu-arm"* ]] || \
-     [ "$TEST_DEVICE" == "mxe5400-qemu-x86_64" ] || \
-     [ "$TEST_DEVICE" == "mxe5400-qemu-ppc" ] || \
-     [ "$TEST_DEVICE" == "mxe5400-qemu-mips64" ]; then
+     [ "$TEST_DEVICE" == "aws-ec2_qemu-x86_64" ] || \
+     [ "$TEST_DEVICE" == "aws-ec2_qemu-ppc" ] || \
+     [ "$TEST_DEVICE" == "aws-ec2_qemu-mips64" ]; then
     sed -i "s@KERNEL_IMG@${NFS_ROOT}\/${RSYNC_DEST_DIR}\/${NAME}\/${KERNEL_FILE}@g; \
             s@EXT4_IMG@${NFS_ROOT}\/${RSYNC_DEST_DIR}\/${NAME}\/${IMAGE_NAME}.ext4@g; \
             s@DTB_FILE@${NFS_ROOT}\/${RSYNC_DEST_DIR}\/${NAME}\/${DTB_FILE}@g" "$TEST_JOB"
