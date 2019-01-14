@@ -119,8 +119,8 @@ post_build:
   # post process script environment.
   # Default: ''
   postprocess_args:
-    RSYNC_SERVER: 
-    RSYNC_DEST_DIR: ./
+    RSYNC_SERVER: rsync
+    RSYNC_DEST_DIR: builds
     # HTTP_ROOT is used to get test images, it's related to RSYNC server
     HTTP_ROOT: http://35.166.221.145/builds
     SMTPSERVER: 
