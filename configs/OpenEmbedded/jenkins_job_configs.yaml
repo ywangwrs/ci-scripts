@@ -180,6 +180,7 @@ test_config:
   test_args:
     LAVA_SERVER: 54.188.58.171
     LAVA_USER: lpdtest
+    LAVA_AUTH_TOKEN: token
     # NFS_ROOT is used to get target images (kernel and rootfs) for testing
     NFS_ROOT: /opt/rsync
     TEST_DEVICE: aws-ec2_qemu-x86_64
