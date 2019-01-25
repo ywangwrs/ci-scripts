@@ -17,7 +17,7 @@
   name: pyro-sato
   prebuild:
   - build_configure.sh
-  - --enable-sstate-mirrors=http://54.184.90.36/builds/pyro_sstate/
+  - --enable-sstate-mirrors=http://54.184.90.36/builds/pyro_sstate
   - --enable-bootimage=ext4
   setup:
   - poky_setup.sh

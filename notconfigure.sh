@@ -315,7 +315,7 @@ process_whitelist_intel(){
     fi
 
     if [ -n "$SHARED_SSTATE_MIRRORS" ]; then
-        echo "SSTATE_MIRRORS ?= \"file://.* $SHARED_SSTATE_MIRRORS/\""
+        echo "SSTATE_MIRRORS ?= \"file://.* $SHARED_SSTATE_MIRRORS/PATH\""
     fi
 } >> "$LOCALCONF"
 
