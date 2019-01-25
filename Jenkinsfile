@@ -116,7 +116,7 @@ node('docker') {
         git(url:params.CI_REPO, branch:params.CI_BRANCH)
       }
 
-      def docker_params = common_docker_params
+      def docker_params = common_docker_params + " -v /opt/sstate_cache:/home/jenkins/workspace/sstate_cache "
       def env_args = ["MESOS_TASK_ID=${BUILD_ID}", "BASE=${WORKSPACE}", "REMOTE=${REMOTE}"]
       if (params.TOASTER == "enable") {
         docker_params = docker_params + ' --expose=8800 -P '
