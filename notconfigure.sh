@@ -51,6 +51,7 @@ PREMIRROR_PATH=
 DL_DIR=
 MACHINE=
 SHARED_SSTATE_DIR=
+SHARED_SSTATE_MIRRORS=
 
 for i in "$@"
 do
@@ -81,6 +82,7 @@ do
         --dl_dir=*)             DL_DIR="${i#*=}" ;;
         --machine=*)            MACHINE="${i#*=}" ;;
         --enable-shared-sstate=*) SHARED_SSTATE_DIR="${i#*=}" ;;
+        --enable-sstate-mirrors=*) SHARED_SSTATE_MIRRORS="${i#*=}" ;;
         *)                      ;;
     esac
     shift
@@ -310,6 +312,10 @@ process_whitelist_intel(){
 
     if [ -n "$SHARED_SSTATE_DIR" ]; then
         echo "SSTATE_DIR = \"$WORKSPACE/../$SHARED_SSTATE_DIR/\""
+    fi
+
+    if [ -n "$SHARED_SSTATE_MIRRORS" ]; then
+        echo "SSTATE_MIRRORS ?= \"file://.* $SHARED_SSTATE_MIRRORS/\""
     fi
 } >> "$LOCALCONF"
 
