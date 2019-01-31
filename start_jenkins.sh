@@ -114,6 +114,7 @@ EOF
 CLEANUP=1
 PULL_IMAGES=1
 SWARM=0
+SHUTDOWN=0
 
 declare -a FILES
 FILES=(--file wrl-ci.yaml)
@@ -133,6 +134,7 @@ while [ "$#" -gt 0 ]; do
         --consul-tag=*)   CONSUL_TAG="${1#*=}"; shift 1;;
         --no-pull)        PULL_IMAGES=0; shift 1;;
         --swarm)          SWARM=1; shift 1;;
+        --shutdown)       SHUTDOWN=1; shift 1;;
         --debug)          JENKINS_INIT_DEBUG="true"; shift 1;;
         --jenkins-agent-num-executors=*)  JENKINS_AGENT_NUM_EXECUTORS="${1#*=}"; shift 1;;
         --jenkins-master-num-executors=*) JENKINS_MASTER_NUM_EXECUTORS="${1#*=}"; shift 1;;
@@ -178,18 +180,6 @@ fi
 
 echo "Using registry $REGISTRY."
 
-if [ "$PULL_IMAGES" == '1' ]; then
-    echo "Pull latest docker images from Docker Hub"
-    ${DOCKER_CMD[*]} pull "${REGISTRY}/jenkins-master:${JENKINS_MASTER_TAG}"
-    ${DOCKER_CMD[*]} pull "${REGISTRY}/jenkins-swarm-client:${JENKINS_AGENT_TAG}"
-    ${DOCKER_CMD[*]} pull "${REGISTRY}/ubuntu1604_64:${BUILDER_TAG}"
-    ${DOCKER_CMD[*]} pull "${REGISTRY}/postbuild:${POSTBUILD_TAG}"
-    ${DOCKER_CMD[*]} pull "${REGISTRY}/toaster_aggregator:${TOASTER_TAG}"
-    ${DOCKER_CMD[*]} pull "consul:${CONSUL_TAG}"
-    ${DOCKER_CMD[*]} pull "blacklabelops/nginx:${RPROXY_TAG}"
-    ${DOCKER_CMD[*]} pull gliderlabs/registrator:latest
-fi
-
 get_primary_ip_address() {
     # show which device internet connection would use and extract ip of that device
     ip=$(ip -4 route get 8.8.8.8 | awk 'NR==1 {print $NF}')
@@ -205,6 +195,30 @@ host "$HOSTNAME" > /dev/null 2>&1
 if [ $? != 0 ]; then
     echo "The hostname for this system is not in DNS. Attempting ip address fallback"
     export HOST=$HOSTIP
+fi
+
+if [ "$SHUTDOWN" == '1' ]; then
+    # match the docker stack volume and network prefix
+    export COMPOSE_PROJECT_NAME=ci
+    export NETWORK_TYPE=bridge
+
+    echo "Stopping CI with: docker-compose ${FILES[*]} down"
+    docker-compose "${FILES[@]}" down
+
+    docker network remove rsync_net
+    exit
+fi
+
+if [ "$PULL_IMAGES" == '1' ]; then
+    echo "Pull latest docker images from Docker Hub"
+    ${DOCKER_CMD[*]} pull "${REGISTRY}/jenkins-master:${JENKINS_MASTER_TAG}"
+    ${DOCKER_CMD[*]} pull "${REGISTRY}/jenkins-swarm-client:${JENKINS_AGENT_TAG}"
+    ${DOCKER_CMD[*]} pull "${REGISTRY}/ubuntu1604_64:${BUILDER_TAG}"
+    ${DOCKER_CMD[*]} pull "${REGISTRY}/postbuild:${POSTBUILD_TAG}"
+    ${DOCKER_CMD[*]} pull "${REGISTRY}/toaster_aggregator:${TOASTER_TAG}"
+    ${DOCKER_CMD[*]} pull "consul:${CONSUL_TAG}"
+    ${DOCKER_CMD[*]} pull "blacklabelops/nginx:${RPROXY_TAG}"
+    ${DOCKER_CMD[*]} pull gliderlabs/registrator:latest
 fi
 
 docker inspect rsync_net &> /dev/null
