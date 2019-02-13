@@ -163,14 +163,11 @@
   - test_configure.py
   build_cmd_for_test:
   build_options:
-  - IMAGE_INSTALL_append += "python3-pkgutil"
-  - IMAGE_INSTALL_append += "python3-unittest"
-  - IMAGE_INSTALL_append += "python3-multiprocessing"
   - IMAGE_FSTYPES += "ext4"
-  - INHERIT += "testimage"
-  - TEST_IMAGE = "1"
-  - TEST_QEMUBOOT_TIMEOUT = "1500"
-  lava_test_repo: git://ala-lxgit.wrs.com/lpd-ops/lava-test.git
+  lava_test_repo: https://github.com/ywangwrs/lava-test.git
+  aws-ec2_qemu-x86_64:
+    job_template: lava-test/jobs/templates/OpenEmbedded/x86_64_qemu_job_lava-smoke-test_template.yaml
+    timeout: 300
   simics:
     job_template: lava-test/jobs/templates/wrlinux-10/x86_simics_job_linaro-smoke-test_template.yaml
     timeout: 300

@@ -51,7 +51,7 @@ ci_config:
   ci_branch: master
   # The location of the ci-scripts repo. Override to use local mirror.
   # Default: https://github.com/WindRiver-OpenSourceLabs/ci-scripts.git
-  ci_repo: git://ala-lxgit.wrs.com/projects/wrlinux-ci/ci-scripts.git
+  ci_repo: https://github.com/ywangwrs/ci-scripts.git
 
 cache_sources:
   # Specify a remote for the wrlinux_update.sh script to clone or update from.
@@ -92,24 +92,24 @@ build:
   # Default: ubuntu1604_64.
   image: ubuntu1604_64
   # Name of file that contains valid build configurations.
-  build_configs_file: configs/WRLinux10/combos-WRLINUX_10_BASE.yaml
+  build_configs_file: configs/WRLinux10/combos-WRLINUX_10_17_BASE.yaml
   # Override the branch defined in the combos file.
   # Default: ''
-  branch: WRLINUX_10_17_LTS
+  branch: WRLINUX_10_17_BASE
   # builds as specified in build_configs_file. Use all to queue
   # all the configs.
   build_configs:
-    - intel-x86-64_wrlinux-image-glibc-std
+    - qemux86-64_wrlinux_image-glibc-std
   # Specify the layer index type
   # Default: restapi-web
   # Set to restapi-files if populate it with a cached mirror-index
   layerindex_type: restapi-web
   # Specify the source URL of layer index
   # Default: https://layers.openembedded.org/layerindex/api/
-  layerindex_source: http://layers.wrs.com/layerindex/api/
+  layerindex_source: https://layers.openembedded.org/layerindex/api/
   # Specify the URL of bitbake repo
   # Default: git://git.openembedded.org/bitbake
-  bitbake_repo_url: git://ala-lxgit.wrs.com/bitbake
+  bitbake_repo_url: git://git.openembedded.org/bitbake
 
 post_build:
   # The Docker image used for the post process stage.
@@ -119,14 +119,14 @@ post_build:
   # post process script environment.
   # Default: ''
   postprocess_args:
-    RSYNC_SERVER: yow-lpdtest.wrs.com
-    RSYNC_DEST_DIR: builds/wrlinux10
+    RSYNC_SERVER: rsync
+    RSYNC_DEST_DIR: builds
     # HTTP_ROOT is used to get test images, it's related to RSYNC server
-    HTTP_ROOT: http://yow-lpdtest.wrs.com/tftpboot
-    SMTPSERVER: prod-webmail.windriver.com
-    REPORT_SERVER: http://yow-lpdtest.wrs.com:9200
+    HTTP_ROOT: http://35.166.221.145/builds
+    SMTPSERVER: 
+    REPORT_SERVER: 
     #- EMAIL: 'user1@windriver.com user2@xxx.com'
-    EMAIL: yang.wang@windriver.com
+    EMAIL: 
   # list of scripts in the scripts/ directory to be run after
   # a successful build.
   # Default: rsync,cleanup.
@@ -169,7 +169,7 @@ test_config:
   # linaro-pmq-test                 | hardware
   # linaro-rt-migrate-test          | hardware
   #
-  test: oeqa-default-test
+  test: linaro-smoke-test
   # Name of file that contains test configurations.
   test_configs_file: configs/WRLinux10/test_configs.yaml
   # The Docker image used for the test stage.
@@ -178,12 +178,13 @@ test_config:
   # list of args in form KEY: VAL that will be injected into
   # test and post test script environment.
   test_args:
-    LAVA_SERVER: yow-lpdtest.wrs.com:8080
+    LAVA_SERVER: 54.188.58.171
     LAVA_USER: lpdtest
+    LAVA_AUTH_TOKEN: token
     # NFS_ROOT is used to get target images (kernel and rootfs) for testing
-    NFS_ROOT: /net/yow-lpdtest/var/lib/tftpboot
-    TEST_DEVICE: simics
-    RETRY: 1
+    NFS_ROOT: /opt/rsync
+    TEST_DEVICE: aws-ec2_qemu-x86_64
+    RETRY: 0
 
 post_test:
   # The Docker image used for the post test stage.

@@ -1,0 +1,15 @@
+- branch: WRLINUX_10_17_BASE
+  build:
+  - 'bitbake wrlinux-image-glibc-std'
+  name: qemux86-64_wrlinux_image-glibc-std
+  prebuild:
+  - build_configure.sh
+  - --no-network=0
+  - --enable-bootimage=ext4
+  - --enable-shared-sstate=sstate_cache
+  setup:
+  - --distro=wrlinux
+  - --machine=qemux86-64
+  - --dl-layers
+  - --accept-eula=yes
+  - --templates=feature/ptest
