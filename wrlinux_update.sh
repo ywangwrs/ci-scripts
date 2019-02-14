@@ -204,7 +204,7 @@ main()
                 fi
                 lock_and_update "$BRANCH" "$REMOTE"
                 ;;
-            WRLINUX_10_18*)
+            WRLINUX_10_18_LTS)
                 if [ -z "$REMOTE" ]; then
                     REMOTE="https://windshare.windriver.com/ondemand/remote.php/gitsmart/$BRANCH/wrlinux-x"
                 fi
