@@ -63,13 +63,13 @@ layerindex_overrides:
   - layer_name:
     # Override the branch defined in the combos file.
     # Default: the same as 'branch' set in 'build' section
-    branch: WRLINUX_10_17_LTS
+    branch: WRLINUX_10_18_BASE
     # Specify the layer vcs_url to used with a Devbuild. If not specified the
     # vcs_url will not be changed.
     layer_vcs_url: git://git.wrs.com/layers/wr-bsps/nxp-imx7
     # Specify the branch to be used with on the modified layer for a Devbuild.
     # Defaults to branch used for build.
-    layer_actual_branch: WRLINUX_10_17_LTS_RCPL0004
+    layer_actual_branch: WRLINUX_10_18_BASE_RCPL0004
     # Specify the subdir of a repository in which to find the layer.
     layer_vcs_subdir:
 
@@ -77,13 +77,13 @@ layerindex_overrides:
   - layer_name:
     # Override the branch defined in the combos file.
     # Default: the same as 'branch' set in 'build' section
-    branch: WRLINUX_10_17_LTS
+    branch: WRLINUX_10_18_BASE
     # Specify the layer vcs_url to used with a Devbuild. If not specified the
     # vcs_url will not be changed.
     layer_vcs_url: git://git.wrs.com/layers/wr-bsps/intel-x86
     # Specify the branch to be used with on the modified layer for a Devbuild.
     # Defaults to branch used for build.
-    layer_actual_branch: WRLINUX_10_17_LTS_RCPL0004
+    layer_actual_branch: WRLINUX_10_18_BASE_RCPL0004
     # Specify the subdir of a repository in which to find the layer.
     layer_vcs_subdir:
 
@@ -92,10 +92,10 @@ build:
   # Default: ubuntu1604_64.
   image: ubuntu1604_64
   # Name of file that contains valid build configurations.
-  build_configs_file: configs/WRLinux10/combos-WRLINUX_10_17_BASE.yaml
+  build_configs_file: configs/WRLinux10/combos-WRLINUX_10_18_BASE.yaml
   # Override the branch defined in the combos file.
   # Default: ''
-  branch: WRLINUX_10_17_BASE
+  branch: WRLINUX_10_18_BASE
   # builds as specified in build_configs_file. Use all to queue
   # all the configs.
   build_configs:
