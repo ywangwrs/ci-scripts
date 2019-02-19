@@ -12,6 +12,19 @@
 - branch: WRLINUX_10_18_BASE
   build:
   - 'bitbake wrlinux-image-glibc-std'
+  name: genericx86-64_wrlinux_image-glibc-std
+  prebuild:
+  - build_configure.sh
+  - --no-network=0
+  - --enable-shared-sstate=sstate_cache
+  setup:
+  - --distro=wrlinux
+  - --machine=genericx86-64
+  - --dl-layers
+
+- branch: WRLINUX_10_18_BASE
+  build:
+  - 'bitbake wrlinux-image-glibc-std'
   name: intel-x86-32_wrlinux-image-glibc-std
   prebuild:
   - build_configure.sh
