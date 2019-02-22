@@ -159,6 +159,9 @@ node('docker') {
       docker_params = add_env( docker_params, env_args )
       def cmd="${WORKSPACE}/ci-scripts/build_postprocess.sh"
       sh "docker run --init ${docker_params} ${REGISTRY}/${POSTPROCESS_IMAGE} ${cmd}"
+      def postporcess_args = params.POSTPROCESS_ARGS.replaceAll(',','; ')
+      def test_args = params.TEST_ARGS.replaceAll(',','; ')
+      sh "${postporcess_args} && ${test_args} && ${WORKSPACE}/ci-scripts/scripts/copy2s3.sh ${NAME}"
     }
   }
 
