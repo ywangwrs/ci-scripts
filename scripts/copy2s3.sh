@@ -60,8 +60,9 @@ copy2s3() {
 	       -o -name local.conf"
     echo "LOCAL_RSYNC_DIR=$LOCAL_RSYNC_DIR"
     find "$LOCAL_RSYNC_DIR" -name *Image
-    find "$LOCAL_RSYNC_DIR" \( $search_files \) -exec "$AWSCLI" s3 cp {} s3://${S3_BUCKET}/${S3_BUCKET_DIR}/ \;
-    "$AWSCLI" aws s3 ls --recursive s3://${S3_BUCKET}/${S3_BUCKET_DIR}
+    docker run governmentpaas/awscli aws s3 cp /opt/rsync/builds/genericx86-64_wrlinux_image-glibc-std/genericx86-64_wrlinux_image-glibc-std/bzImage s3://${S3_BUCKET}/${S3_BUCKET_DIR}/
+    find "$LOCAL_RSYNC_DIR" \( $search_files \) -exec docker run governmentpaas/awscli aws s3 cp {} s3://${S3_BUCKET}/${S3_BUCKET_DIR}/ \;
+    docker run governmentpaas/awscli aws s3 ls --recursive s3://${S3_BUCKET}/${S3_BUCKET_DIR}
 }
 
 copy2s3 "$@"
