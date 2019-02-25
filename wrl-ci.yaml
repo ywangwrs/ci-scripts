@@ -176,6 +176,8 @@ services:
     image: governmentpaas/awscli
     container_name: awscli
     hostname: awscli
+    stdin_open: true
+    tty: true
     networks:
       - rsync_net
     volumes:
