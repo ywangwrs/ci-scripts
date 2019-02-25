@@ -46,9 +46,6 @@ node('docker') {
       git(url:params.CI_REPO, branch:params.CI_BRANCH)
     }
     sh "${WORKSPACE}/ci-scripts/docker_run_check.sh"
-    def postporcess_args = params.POSTPROCESS_ARGS.replaceAll(',','; export ')
-    def test_args = params.TEST_ARGS.replaceAll(',','; export ')
-    sh "export ${postporcess_args} && export ${test_args} && ${WORKSPACE}/ci-scripts/scripts/copy2s3.sh ${NAME}"
   }
 
   stage('Cache Sources') {

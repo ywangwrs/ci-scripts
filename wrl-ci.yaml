@@ -111,7 +111,6 @@ services:
       - jenkins_agent:/home/jenkins
       - /etc/hostname:/etc/hostname
       - /etc/localtime:/etc/localtime
-      - /opt/rsync:/opt/rsync
     secrets:
       - agent_password
 
@@ -172,6 +171,15 @@ services:
       - rsync_net
     volumes:
       - /opt/rsync/builds:/builds
+
+  awscli:
+    image: governmentpaas/awscli
+    container_name: awscli
+    hostname: awscli
+    networks:
+      - rsync_net
+    volumes:
+      - /opt/rsync:/opt/rsync
 
 volumes:
   jenkins_home:
