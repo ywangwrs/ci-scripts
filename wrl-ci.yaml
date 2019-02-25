@@ -111,6 +111,7 @@ services:
       - jenkins_agent:/home/jenkins
       - /etc/hostname:/etc/hostname
       - /etc/localtime:/etc/localtime
+      - /opt/rsync:/opt/rsync
     secrets:
       - agent_password
 

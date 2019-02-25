@@ -58,6 +58,8 @@ copy2s3() {
 	       -o -name *.tar.bz2 \
 	       -o -name *.log \
 	       -o -name local.conf"
+    echo "LOCAL_RSYNC_DIR=$LOCAL_RSYNC_DIR"
+    find "$LOCAL_RSYNC_DIR" -name *Image
     find "$LOCAL_RSYNC_DIR" \( $search_files \) -exec "$AWSCLI" s3 cp {} s3://${S3_BUCKET}/${S3_BUCKET_DIR}/ \;
     "$AWSCLI" aws s3 ls --recursive s3://${S3_BUCKET}/${S3_BUCKET_DIR}
 }
