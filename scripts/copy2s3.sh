@@ -51,13 +51,15 @@ copy2s3() {
 
     LOCAL_RSYNC_DIR="$NFS_ROOT/$RSYNC_DEST_DIR"
 
+    AWSCLI="docker run governmentpaas/awscli aws"
+
     # Copy log files and images to S3
     search_files="-name *Image \
 	       -o -name *.tar.bz2 \
 	       -o -name *.log \
 	       -o -name local.conf"
-    find "$LOCAL_RSYNC_DIR" \( $search_files \) -exec aws s3 cp {} s3://${S3_BUCKET}/${S3_BUCKET_DIR}/ \;
-    aws s3 ls --recursive s3://${S3_BUCKET}/${S3_BUCKET_DIR}
+    find "$LOCAL_RSYNC_DIR" \( $search_files \) -exec "$AWSCLI" s3 cp {} s3://${S3_BUCKET}/${S3_BUCKET_DIR}/ \;
+    "$AWSCLI" aws s3 ls --recursive s3://${S3_BUCKET}/${S3_BUCKET_DIR}
 }
 
 copy2s3 "$@"
