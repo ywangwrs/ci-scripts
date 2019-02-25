@@ -46,6 +46,7 @@ node('docker') {
       git(url:params.CI_REPO, branch:params.CI_BRANCH)
     }
     sh "${WORKSPACE}/ci-scripts/docker_run_check.sh"
+    sh "docker run governmentpaas/awscli aws s3 ls"
   }
 
   stage('Cache Sources') {
