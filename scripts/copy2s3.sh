@@ -52,7 +52,7 @@ copy2s3() {
     LOCAL_RSYNC_DIR="$NFS_ROOT/$RSYNC_DEST_DIR"
 
     # Generate need-runtime-test flag and copy it to S3
-    touch ${LOCAL_RSYNC_DIR}/need-runtime-test
+    sudo touch ${LOCAL_RSYNC_DIR}/need-runtime-test
 
     # Copy log files and images to S3
     search_files="-name *Image \
