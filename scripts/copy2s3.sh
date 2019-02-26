@@ -51,16 +51,16 @@ copy2s3() {
 
     LOCAL_RSYNC_DIR="$NFS_ROOT/$RSYNC_DEST_DIR"
 
+    # Generate need-runtime-test flag and copy it to S3
+    touch ${LOCAL_RSYNC_DIR}/need-runtime-test
+
     # Copy log files and images to S3
     search_files="-name *Image \
 	       -o -name *.tar.bz2 \
 	       -o -name *.log \
-	       -o -name local.conf"
+	       -o -name local.conf \
+	       -o -name need-runtime-test"
     find "$LOCAL_RSYNC_DIR" \( $search_files \) -exec docker exec awscli aws s3 cp {} s3://${S3_BUCKET}/${S3_BUCKET_DIR}/ \;
-
-    # Generate need-runtime-test flag and copy it to S3
-    touch /tmp/need-runtime-test
-    docker exec awscli aws s3 cp /tmp/need-runtime-test s3://${S3_BUCKET}/${S3_BUCKET_DIR}/
 
     docker exec awscli aws s3 ls --recursive s3://${S3_BUCKET}/${S3_BUCKET_DIR}
 }
