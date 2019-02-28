@@ -64,7 +64,7 @@ main()
     setup_post_scripts "post-test-success.d" "$POST_TEST_SUCCESS" "$BUILD"
     setup_post_scripts "post-test-fail.d" "$POST_TEST_FAIL" "$BUILD"
 
-    if [ -f "00-TEST-PASS" ]; then
+    if [ -f "00-TEST-PASS" ] || [ -f "00-TEST-REMOTE" ]; then
         run_post_scripts "$BUILD" "post-test-success.d"
     elif [ -f "00-TEST-FAIL" ]; then
         run_post_scripts "$BUILD" "post-test-fail.d"
