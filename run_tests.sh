@@ -22,20 +22,6 @@ OEQA_TEST_IMAGE=testexport.tar.gz
 TEST_STATFILE=${BUILD}/teststats.json
 create_report_statfile "$TEST_STATFILE" "$JENKINS_URL" "$JOB_BASE_NAME"
 
-{
-    if [ -f "$BUILD/00-PASS" ]; then
-        printf '    "build_result": "PASSED"\n'
-    elif [ -f "$BUILD/00-FAIL" ]; then
-        printf '    "build_result": "FAILED"\n'
-    fi
-    printf '  },\n'
-    printf '\n  "test_info": {\n'
-    if [ -n "$EMAIL" ]; then
-        printf '    "email": "%s",\n' "$EMAIL"
-    fi
-    printf '    "start_time": "%s (%s)",\n' "$(date '+%Y-%m-%d %H:%M:%S')" "$(date +%s)"
-} >> "$TEST_STATFILE"
-
 function generate_test_mail () {
     STATUS=$1
 
@@ -100,6 +86,48 @@ function quit_test () {
 # Check if lava-tool exists
 command -v lava-tool >/dev/null 2>&1 || { echo >&2 "lava-tool required. Aborting."; exit 0; }
 
+WRL_VER=$(get_wrlinux_version "$BUILD")
+
+if [ -z "$TEST_DEVICE" ]; then
+    TEST_DEVICE=simics
+fi
+
+if [ -z "$TEST" ]; then
+    TEST=oeqa-default-test
+fi
+
+{
+    if [ -f "$BUILD/00-PASS" ]; then
+        printf '    "build_result": "PASSED"\n'
+    elif [ -f "$BUILD/00-FAIL" ]; then
+        printf '    "build_result": "FAILED"\n'
+    fi
+    printf '  },\n'
+    printf '\n  "test_info": {\n'
+    printf '    "test_device": "%s",\n' "${TEST_DEVICE}"
+    printf '    "wrl_ver": "%s",\n' "$WRL_VER"
+    printf '    "test_suite": "%s",\n' "${TEST}"
+    if [ -n "$EMAIL" ]; then
+        printf '    "email": "%s",\n' "$EMAIL"
+    fi
+    printf '    "start_time": "%s (%s)",\n' "$(date '+%Y-%m-%d %H:%M:%S')" "$(date +%s)"
+} >> "$TEST_STATFILE"
+
+# For the case when doing runtime test outside of AWS
+if [[ "$TEST_DEVICE" == 'remote' ]]; then
+    {
+        printf '  },\n'
+
+        printf '\n  "test_report": {\n'
+        printf '    "eof": ""\n'
+        printf '  }\n'
+        printf '}'
+    } >> "$TEST_STATFILE"
+
+    rsync -avL "$TEST_STATFILE" "rsync://${RSYNC_SERVER}/${RSYNC_DEST_DIR}/"
+    exit 0
+fi
+
 # Check necessary parameters
 if [ -z "$LAVA_USER" ] || [ -z "$LAVA_SERVER" ] || [ -z "$NFS_ROOT" ] || \
    [ -z "$HTTP_ROOT" ] || [ -z "$RSYNC_DEST_DIR" ]; then
@@ -116,28 +144,15 @@ fi
 # when using simics instances in simics-docker
 SIMICS_IMG_ROOT='/images'
 
-if [ -z "$TEST_DEVICE" ]; then
-    TEST_DEVICE=simics
-fi
-
-if [ -z "$TEST" ]; then
-    TEST=oeqa-default-test
-fi
-
-WRL_VER=$(get_wrlinux_version "$BUILD")
-
 FILE_LINK="${HTTP_ROOT}/${RSYNC_DEST_DIR}/${NAME}"
 
 {
-    printf '    "wrl_ver": "%s",\n' "$WRL_VER"
     printf '    "LAVA_server": "%s",\n' "$LAVA_SERVER"
     printf '    "LAVA_user": "%s",\n' "$LAVA_USER"
     printf '    "LAVA_token": "%s",\n' "$LAVA_AUTH_TOKEN"
     printf '    "NFS_root": "%s",\n' "$NFS_ROOT"
     printf '    "HTTP_root": "%s",\n' "$HTTP_ROOT"
     printf '    "test_images": "%s",\n' "${HTTP_ROOT}/${RSYNC_DEST_DIR}"
-    printf '    "test_device": "%s",\n' "${TEST_DEVICE}"
-    printf '    "test_suite": "%s",\n' "${TEST}"
 } >> "$TEST_STATFILE"
 
 # Start the hang check by the test post process script
