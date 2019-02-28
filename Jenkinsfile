@@ -186,7 +186,7 @@ node('docker') {
         dir('ci-scripts') {
           git(url:params.CI_REPO, branch:params.CI_BRANCH)
         }
-        def docker_params = common_docker_params
+        def docker_params = common_docker_params + " --network=rsync_net "
         def env_args = ["NAME=${NAME}"]
         env_args = env_args + ["POST_TEST_SUCCESS=${POST_TEST_SUCCESS}", "POST_TEST_FAIL=${POST_TEST_FAIL}"]
         env_args = env_args + params.TEST_ARGS.tokenize(',')
