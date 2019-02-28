@@ -125,6 +125,11 @@ if [[ "$TEST_DEVICE" == 'remote' ]]; then
     } >> "$TEST_STATFILE"
 
     rsync -avL "$TEST_STATFILE" "rsync://${RSYNC_SERVER}/${RSYNC_DEST_DIR}/"
+
+    # Generate need-runtime-test flag and copy it to S3
+    touch "$BUILD/need-runtime-test"
+    rsync -avL "$BUILD/need-runtime-test" "rsync://${RSYNC_SERVER}/${RSYNC_DEST_DIR}/"
+
     exit 0
 fi
 
