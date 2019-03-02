@@ -56,7 +56,11 @@ copy2s3() {
 	       -o -name *.tar.bz2 \
 	       -o -name *.log \
 	       -o -name *.json \
+	       -o -name *.dtb \
+	       -o -name *.manifest \
+	       -o -name *.rpm \
 	       -o -name local.conf \
+	       -o -name testexport.tar.gz \
 	       -o -name need-runtime-test"
     find "$LOCAL_RSYNC_DIR" \( $search_files \) -exec docker exec awscli aws s3 cp {} s3://${S3_BUCKET}/${S3_BUCKET_DIR}/ \;
 
