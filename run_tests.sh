@@ -116,9 +116,6 @@ fi
 # For the case when doing runtime test outside of AWS
 if [[ "$TEST_DEVICE" == 'remote' ]]; then
     {
-        printf '  },\n'
-
-        printf '\n  "test_report": {\n'
         printf '    "eof": ""\n'
         printf '  }\n'
         printf '}'
