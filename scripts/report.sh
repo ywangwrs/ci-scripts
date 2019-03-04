@@ -87,10 +87,14 @@ report() {
         fi
     fi
 
-    echo "Reporting to $REPORT_SERVER"
-    current_date=$(date +%Y.%m.%d)
-    # report to elasticsearch server
-    curl -XPOST "${REPORT_SERVER}/wrigel-${current_date}/logs" -H 'Content-Type: application/json' -d @"$REPORT_STATFILE"
+    if [[ "$TEST_DEVICE" == 'remote' ]]; then
+        echo "Report step will be done remotely."
+    else
+        echo "Reporting to $REPORT_SERVER"
+        current_date=$(date +%Y.%m.%d)
+        # report to elasticsearch server
+        curl -XPOST "${REPORT_SERVER}/wrigel-${current_date}/logs" -H 'Content-Type: application/json' -d @"$REPORT_STATFILE"
+    fi
 }
 
 report "$@"
