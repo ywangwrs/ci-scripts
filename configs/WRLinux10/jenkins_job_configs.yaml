@@ -99,7 +99,7 @@ build:
   # builds as specified in build_configs_file. Use all to queue
   # all the configs.
   build_configs:
-    - qemux86-64_wrlinux_image-glibc-std
+    - qemux86-64_wrlinux-image-glibc-std
   # Specify the layer index type
   # Default: restapi-web
   # Set to restapi-files if populate it with a cached mirror-index
@@ -122,7 +122,7 @@ post_build:
     RSYNC_SERVER: rsync
     RSYNC_DEST_DIR: builds
     # HTTP_ROOT is used to get test images, it's related to RSYNC server
-    HTTP_ROOT: http://35.166.221.145/builds
+    HTTP_ROOT: http://35.166.221.145
     SMTPSERVER: 
     REPORT_SERVER: 
     #- EMAIL: 'user1@windriver.com user2@xxx.com'
@@ -178,7 +178,7 @@ test_config:
   # list of args in form KEY: VAL that will be injected into
   # test and post test script environment.
   test_args:
-    LAVA_SERVER: 54.188.58.171
+    LAVA_SERVER: 54.188.58.171:8080
     LAVA_USER: lpdtest
     LAVA_AUTH_TOKEN: token
     # NFS_ROOT is used to get target images (kernel and rootfs) for testing
