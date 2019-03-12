@@ -1,7 +1,7 @@
 - branch: WRLINUX_10_17_BASE
   build:
   - 'bitbake wrlinux-image-glibc-std'
-  name: qemux86-64_wrlinux_image-glibc-std
+  name: qemux86-64_wrlinux-image-glibc-std
   prebuild:
   - build_configure.sh
   - --no-network=0
