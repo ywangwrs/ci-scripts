@@ -23,6 +23,11 @@
 copy2s3() {
     local NAME="$1"
 
+    # get product version
+    source "$WORKSPACE"/ci-scripts/common.sh
+    BUILD="$WORKSPACE/builds/builds-$BUILD_ID"
+    WRL_VER=$(get_wrlinux_version "$BUILD")
+
     # Use default S3 bucket if one has not been specified
     if [ -z "$S3_BUCKET" ]; then
         echo "INFO: S3_BUCKET not defined. Using default one: s3-build-images."
@@ -35,7 +40,7 @@ copy2s3() {
     else
 	TIMESTAMP=$(date +%Y%m%d_%H%M)
 	# log files and images will be stored into s3://${S3_BUCKET}/${S3_BUCKET_DIR}
-	S3_BUCKET_DIR="${TIMESTAMP}-${NAME}"
+	S3_BUCKET_DIR="${TIMESTAMP}-${WRL_VER}-${NAME}"
     fi
 
     if [ -z "$NFS_ROOT" ]; then
