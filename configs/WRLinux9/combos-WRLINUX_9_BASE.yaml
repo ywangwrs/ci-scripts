@@ -5,7 +5,7 @@
   name: intel-x86-64_wrlinux-image-glibc-std
   prebuild:
   - build_configure.sh
-  - --enable-shared-sstate=wrl9_sstate_cache
+  - --enable-shared-sstate=sstate_cache
   setup:
   - --distro=wrlinux
   - --machine=intel-x86-64
@@ -17,11 +17,13 @@
   name: qemux86-64_wrlinux-image-glibc-std
   prebuild:
   - build_configure.sh
+  - --no-network=0
   - --enable-bootimage=ext4
-  - --enable-shared-sstate=wrl9_sstate_cache
+  - --enable-shared-sstate=sstate_cache
   setup:
   - --distro=wrlinux
   - --machine=qemux86-64
+  - --dl-layers
 - branch: WRLinux-9-Base
   build:
   - bitbake
@@ -74,7 +76,7 @@
   prebuild:
   - build_configure.sh
   - --enable-bootimage=ext4
-  - --enable-shared-sstate=wrl9_sstate_cache
+  - --enable-shared-sstate=sstate_cache
   setup:
   - --distro=wrlinux-small
   - --machine=qemux86-64
