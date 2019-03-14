@@ -222,7 +222,6 @@
   - --no-network=0
   - --enable-bootimage=ext4
   - --enable-shared-sstate=sstate_cache
-  - --no-network=0
   setup:
   - --distro=wrlinux-cgl
   - --machine=qemux86-64
