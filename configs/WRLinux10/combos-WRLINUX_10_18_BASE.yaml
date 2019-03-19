@@ -187,6 +187,20 @@
 
 - branch: WRLINUX_10_18_BASE
   build:
+  - 'bitbake world'
+  name: qemux86-64_world
+  prebuild:
+  - build_configure.sh
+  - --no-network=0
+  - --enable-bootimage=ext4
+  - --enable-shared-sstate=sstate_cache
+  setup:
+  - --distro=wrlinux
+  - --machine=qemux86-64
+  - --dl-layers
+
+- branch: WRLINUX_10_18_BASE
+  build:
   - 'bitbake wrlinux-image-glibc-std'
   name: qemux86-64_wrlinux-image-glibc-std
   prebuild:
