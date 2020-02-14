@@ -56,10 +56,30 @@ post_rsync() {
     fi
 
     local EXPORT_DIR=
-    EXPORT_DIR=$(readlink -f "${NAME}/${TMP_DIR}/deploy/images")
+    EXPORT_DIR=$(readlink -f "${BUILD}/${NAME}/${TMP_DIR}/deploy/images")
+
+    local TEST_EXPORT_DIR=
+    TEST_EXPORT_DIR=$(readlink -f "${BUILD}/${NAME}/${TMP_DIR}/testexport")
 
     # Get image name
-    IMAGE_NAME=$(find "$EXPORT_DIR" -type l -name '*.tar.bz2' -printf '%f' |sed 's/.tar.bz2//g')
+    local IMAGE_NAMES=()
+
+    if [ -d "$TEST_EXPORT_DIR" ]; then
+        # only upload image that matches the image with the testexport file
+        MACHINE=$(find "$EXPORT_DIR" -maxdepth 1 -type d -printf '%P')
+        IMAGE_NAMES=( "$(find "$TEST_EXPORT_DIR" -maxdepth 1 -type d -printf '%P')-$MACHINE" )
+    else
+        # all images but runtime test only supports a single image so upload all if tests aren't enabled
+        IMAGE_NAMES=($(find "$EXPORT_DIR" -type l -name '*.tar.bz2' -printf '%f ' |sed 's/.tar.bz2//g'))
+    fi
+
+    for IMAGE_NAME in "${IMAGE_NAMES[@]}"; do
+        # Get *.hddimg, *.tar.bz2, *.manifest and bzImage files
+        find "$EXPORT_DIR" -name "${IMAGE_NAME}.hddimg" -exec ln -sfrL {} "$RSYNC_SOURCE_DIR/." \;
+        find "$EXPORT_DIR" -name "${IMAGE_NAME}.tar.bz2" -exec ln -sfrL {} "$RSYNC_SOURCE_DIR/." \;
+        find "$EXPORT_DIR" -name "${IMAGE_NAME}.manifest" -exec ln -sfrL {} "$RSYNC_SOURCE_DIR/." \;
+        find "$EXPORT_DIR" -name "${IMAGE_NAME}.ext4" -exec ln -sfrL {} "$RSYNC_SOURCE_DIR/." \;
+    done
 
     # Get *.hddimg, *.tar.bz2, *.manifest and bzImage files
     find "$EXPORT_DIR" -name "${IMAGE_NAME}.hddimg" -exec ln -sfrL {} "$RSYNC_SOURCE_DIR/." \;
@@ -73,6 +93,8 @@ post_rsync() {
     find "$EXPORT_DIR" -name "u-boot*.bin" -exec ln -sfrL {} "$RSYNC_SOURCE_DIR/." \;
     # Get images for QEMU BSPs
     find "$EXPORT_DIR" -name "${IMAGE_NAME}.ext4" -exec ln -sfrL {} "$RSYNC_SOURCE_DIR/." \;
+    # Get bios image for qemuriscv64
+    find "$EXPORT_DIR" -name "fw_jump.elf" -exec ln -sfrL {} "$RSYNC_SOURCE_DIR/." \;
 
     # "Copy" all conf files to rsync dir
     ln -sfrL "${BUILD}/${NAME}/conf" "$RSYNC_SOURCE_DIR/conf"
@@ -80,11 +102,21 @@ post_rsync() {
     # "Copy" all 00-* log files to rsync dir
     find "$BUILD" -type f -name "00-*" -exec ln -sfrL {} "$RSYNC_SOURCE_DIR/." \;
 
+    # "Copy" buildstats_${BUILD_ID}.json, default.xml files to rsync dir
+    local JSON=$(convert_to_json "${BUILD}/buildstats.log" | tr -d '\\' )
+    echo "$JSON" > "${BUILD}/buildstats.json"
+    find "$BUILD" -type f -name "buildstats.json" -exec ln -sfrL {} "$RSYNC_SOURCE_DIR/." \;
+    find "$BUILD" -type f -name "default.xml" -exec ln -sfrL {} "$RSYNC_SOURCE_DIR/." \;
+
     if [[ "$TEST" == *"oeqa"* ]]; then
         # Get rpm package for OE test
         local DEPLOY_DIR=
-        DEPLOY_DIR=$(readlink -f "${NAME}/${TMP_DIR}/deploy/rpm")
+        DEPLOY_DIR=$(readlink -f "${BUILD}/${NAME}/${TMP_DIR}/deploy/rpm")
+        # for WRLinux 9, 10.17 and 10.18
         find "$DEPLOY_DIR" -name "rpm-doc*" \
+             -exec ln -sfrL {} "$RSYNC_SOURCE_DIR/." \;
+        # for WRLinux 10.19
+        find "$DEPLOY_DIR" -name "base-passwd-doc*" \
              -exec ln -sfrL {} "$RSYNC_SOURCE_DIR/." \;
 
         # Get OE test package

@@ -84,9 +84,6 @@ wrl_clone_or_update()
         SETUP_REPO=wrlinux-9
     fi
 
-    # make sure to use git-repo in the same location as wrlinux-x
-    export REPO_URL="${REMOTE:(-9)}/git-repo"
-
     local CACHE_BASE="${BASE}/wrlinux-${SOURCE_LAYOUT}-${BRANCH}"
 
     # create credential file for use by git credential.helper
@@ -186,25 +183,13 @@ main()
                 fi
                 lock_and_update "$BRANCH" "$REMOTE"
                 ;;
-            WRLINUX_10_18_BASE)
-                if [ -z "$REMOTE" ]; then
-                    REMOTE='https://github.com/WindRiver-Labs/wrlinux-x'
-                fi
-                lock_and_update "$BRANCH" "$REMOTE"
-                ;;
             WRLINUX_9_LTS*)
                 if [ -z "$REMOTE" ]; then
                     REMOTE="https://windshare.windriver.com/ondemand/remote.php/gitsmart/$BRANCH/wrlinux-9"
                 fi
                 lock_and_update "$BRANCH" "$REMOTE"
                 ;;
-            WRLINUX_10_17_LTS)
-                if [ -z "$REMOTE" ]; then
-                    REMOTE="https://windshare.windriver.com/ondemand/remote.php/gitsmart/$BRANCH/wrlinux-x"
-                fi
-                lock_and_update "$BRANCH" "$REMOTE"
-                ;;
-            WRLINUX_10_18_LTS)
+            WRLINUX_10_17_LTS | WRLINUX_10_18* | WRLINUX_10_19*)
                 if [ -z "$REMOTE" ]; then
                     REMOTE="https://windshare.windriver.com/ondemand/remote.php/gitsmart/$BRANCH/wrlinux-x"
                 fi

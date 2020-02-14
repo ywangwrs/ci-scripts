@@ -88,6 +88,9 @@ layerindex_overrides:
     layer_vcs_subdir:
 
 build:
+  # Build group id is used to group a set of builds, typically generated from
+  # devbuild, it doesn't have default value
+  build_group_id:
   # The Docker image used for the build.
   # Default: ubuntu1604_64.
   image: ubuntu1604_64
@@ -126,7 +129,7 @@ post_build:
     SMTPSERVER: 
     REPORT_SERVER: 
     #- EMAIL: 'user1@windriver.com user2@xxx.com'
-    EMAIL: 
+    EMAIL: yang.wang@windriver.com
   # list of scripts in the scripts/ directory to be run after
   # a successful build.
   # Default: rsync,cleanup.

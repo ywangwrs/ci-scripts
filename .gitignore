@@ -1,0 +1,9 @@
+*.pyc
+.#*
+*.swp
+*.elc
+.venv/*
+jenkins_auth.txt
+wrigel-configs/*
+wrigel-configs
+flycheck_*

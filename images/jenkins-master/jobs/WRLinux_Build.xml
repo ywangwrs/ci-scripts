@@ -23,13 +23,18 @@
         </hudson.model.StringParameterDefinition>
         <hudson.model.StringParameterDefinition>
           <name>CI_REPO</name>
-          <description>Localtion of the ci-scripts repository</description>
+          <description>Location of the ci-scripts repository</description>
           <defaultValue>https://github.com/WindRiver-OpenSourceLabs/ci-scripts.git</defaultValue>
         </hudson.model.StringParameterDefinition>
         <hudson.model.StringParameterDefinition>
           <name>SETUP_ARGS</name>
           <description>List of args to pass to setup.sh</description>
           <defaultValue>--distro=wrlinux --machine=qemux86-64</defaultValue>
+        </hudson.model.StringParameterDefinition>
+        <hudson.model.StringParameterDefinition>
+          <name>BUILD_GROUP_ID</name>
+          <description>Specify a build group id after launching a Devbuild, it will be used for report.</description>
+          <defaultValue></defaultValue>
         </hudson.model.StringParameterDefinition>
         <hudson.model.StringParameterDefinition>
           <name>PREBUILD_CMD</name>
@@ -102,6 +107,12 @@
           <defaultValue></defaultValue>
           <trim>false</trim>
         </hudson.model.TextParameterDefinition>
+        <hudson.model.TextParameterDefinition>
+          <name>LOCALCONF</name>
+          <description>Contents of a local.conf file that will override the default local.conf</description>
+          <defaultValue></defaultValue>
+          <trim>false</trim>
+        </hudson.model.TextParameterDefinition>
         <hudson.model.StringParameterDefinition>
           <name>LAYERINDEX_TYPE</name>
           <description>Specify the type of layer index</description>
@@ -166,6 +177,21 @@
           <name>GIT_CREDENTIAL_ID</name>
           <description>ID of Git Credentials stored in Jenkins</description>
           <defaultValue>git</defaultValue>
+        </hudson.model.StringParameterDefinition>
+        <hudson.model.StringParameterDefinition>
+          <name>MACHINE</name>
+          <description>Override default machine</description>
+          <defaultValue></defaultValue>
+        </hudson.model.StringParameterDefinition>
+        <hudson.model.StringParameterDefinition>
+          <name>SDKMACHINE</name>
+          <description>Override default sdk machine</description>
+          <defaultValue></defaultValue>
+        </hudson.model.StringParameterDefinition>
+        <hudson.model.StringParameterDefinition>
+          <name>DISTRO</name>
+          <description>Override default distro</description>
+          <defaultValue></defaultValue>
         </hudson.model.StringParameterDefinition>
       </parameterDefinitions>
     </hudson.model.ParametersDefinitionProperty>

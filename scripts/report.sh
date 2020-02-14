@@ -40,6 +40,7 @@ report() {
 
     local BUILD="$1"
     export HOME=/home/jenkins
+    local  REPORT_STATFILE=${BUILD}/summary_${BUILD_ID}.json
 
     get_jenkins_log "$BUILD"
 
@@ -51,13 +52,12 @@ report() {
     command -v curl >/dev/null 2>&1 || { echo >&2 "curl required. Aborting."; exit 0; }
 
     # Handle build failure report
-    if [ ! -f "$BUILD/teststats.json" ]; then
+    if [ ! -f "$BUILD/teststats.json" ] || [[ "$TEST" == 'disable' ]]; then
         if [ "$TEST" != 'disable' ] && [ -f "$BUILD/00-PASS" ]; then
             echo "Report info: Build passed and teststats.json has not been generated."
             exit 0
         else
-            REPORT_STATFILE=${BUILD}/buildstats.json
-            create_report_statfile "$REPORT_STATFILE" "$JENKINS_URL" "$JOB_BASE_NAME"
+            create_report_statfile "$REPORT_STATFILE" "$JENKINS_URL" "$JOB_BASE_NAME" "$BUILD"
 
             if [ -f "$BUILD/00-PASS" ]; then
                 echo "    \"build_result\": \"PASSED\"" >> "$REPORT_STATFILE"

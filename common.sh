@@ -217,11 +217,11 @@ store_logs()
     if [ -f "$BUILD/buildstats.log" ]; then
         cp $BUILD/buildstats.log $GDIR
     fi
-    cp $BUILD/00-wrconfig.log $GDIR
+    cp $BUILD/00-wrsetup.log $GDIR
     cp $MFILE $GDIR
 
     for i in  \
-        00-wrbuild.log 00-wrconfig.log config.log buildstats.log \
+        00-wrbuild.log 00-wrsetup.log config.log buildstats.log \
         $(basename $MFILE) $PKG_LOG $COOKER bitbake_build/tmp/qa.log ; do
         if [ -f $i ]; then
             git add -f $i > /dev/null 2>&1
@@ -309,7 +309,6 @@ function generate_failmail
         echo ""
         echo "Build in $MACHINE $ARCH"
         echo "Branch being built is $BRANCH"
-        echo Logfiles are 00-wrconfig.log and 00-wrbuild.log
         echo Relevant bits of the config were:
         if [ -n "${CONFIGARGS[*]}" ]; then
             echo "    ${CONFIGARGS[*]}"
@@ -319,6 +318,10 @@ function generate_failmail
             echo "    ${BUILD_CMD[*]}"
         fi
         echo ""
+        echo "Jenkins logs: ${JENKINS_URL}job/WRLinux_Build/${BUILD_ID}/console"
+        echo "Artifacts: ${HTTP_ROOT}/${RSYNC_DEST_DIR}/${NAME}"
+        echo "Login: workspace_login.sh --server=${JENKINS_URL:0:(-8)} --builder=$NODE_NAME --build-dir=$BUILD"
+        echo ""
 
         local BUILDLOG=$BUILD/00-wrbuild.log
         if [ -f "$BUILDLOG" ]; then
@@ -327,19 +330,25 @@ function generate_failmail
         fi
         echo "Failed step: $STEP in file: $PKG_LOG"
         echo ""
+
+        local SETUPLOG=$BUILD/00-wrsetup.log
+        if [ "$PKG" == 'configure' ] && [ -f "$SETUPLOG" ]; then
+            echo Here is some context from 00-wrsetup.log
+            echo " --------------------------------------------------"
+            # Remove unhelpful information from the setup logs
+            sed -e '/\[new branch\]/d' -e '/\[new tag\]/d' -e '/Checking out files/d' "$SETUPLOG"
+            echo " --------------------------------------------------"
+        fi
+
+        local PREBUILDLOG=$BUILD/00-prebuild.log
+        if [ "$PKG" == 'configure' ] && [ -f "$PREBUILDLOG" ]; then
+            echo Here is some context from 00-prebuild.log
+            echo " --------------------------------------------------"
+            cat "$PREBUILDLOG" | fold -b -w 500
+            echo " --------------------------------------------------"
+        fi
+
         if [ "$REASON" == "KILLED" ]; then
-            local SETUPLOG=$BUILD/00-wrsetup.log
-            if [ -f "$SETUPLOG" ]; then
-                echo Here is some context from 00-wrsetup.log
-                echo " --------------------------------------------------"
-                if [ `cat $SETUPLOG | wc -m` -lt 4000 ]; then
-                    cat $SETUPLOG | fold -b -w 500
-                else
-                    tail -n "$LOGLINES" | fold -b -w 500
-                fi
-                cat "$SETUPLOG"
-                echo ""
-            fi
             local DOCKERLOG=$BUILD/00-DOCKER.log
             if [ -f "$DOCKERLOG" ]; then
                 echo Here is some context from 00-DOCKER.log
@@ -349,21 +358,19 @@ function generate_failmail
                 echo ""
             fi
         fi
-        echo Here is some context from around the error:
-        echo " --------------------------------------------------"
 
         # Send email has a 998 char line length limit.
         if [ -f "$BUILDLOG" ]; then
+            echo Here is some context from around the error:
+            echo " --------------------------------------------------"
             # cat all the buildlogs if the log file < 4k
             if [ `cat $BUILDLOG | wc -m` -lt 4000 ]; then
                 cat $BUILDLOG | fold -b -w 500
             else
                 grep -C3 '^\[.*\] ERROR:' "$BUILDLOG" | tail -n "$LOGLINES" | fold -b -w 500
             fi
-        else
-            tail -n "$LOGLINES" "$BUILD/00-wrconfig.log" | fold -b -w 500
+            echo " --------------------------------------------------"
         fi
-        echo " --------------------------------------------------"
 
         if [ -f "$PKG_LOG" ]; then
             echo ""
@@ -388,20 +395,6 @@ function generate_failmail
             echo " --------------------------------------------------"
         fi
 
-        if [ -n "$PUSH_HOST" ]; then
-            local FAIL_BRANCH=$BUILD_NAME-$PKG-$(date +'%F-%H%M%S')
-            local LOGLINK="http://$PUSH_HOST/cgit/$FAIL_REPO/.git/log/?h=${FAIL_BRANCH//%/%25}"
-            echo " --------------------------------------"
-            echo " "
-            echo This file, and more detailed log info can be found at:
-            echo "$LOGLINK"
-            echo "To reproduce this failure with a local docker instance, see wraxl docs:"
-            echo "  http://ala-lxgit.wrs.com/cgi-bin/cgit.cgi/lpd-ops/wr-buildscripts.git/tree/README.md"
-            sed -i '/FailBranch:/d' "$STATFILE"
-            echo "FailBranch: $FAIL_BRANCH" >> "$STATFILE"
-            sed -i '/LogLink:/d' "$STATFILE"
-            echo "LogLink: $LOGLINK" >> "$STATFILE"
-        fi
     } > "$MFILE"
 
 }
@@ -428,6 +421,8 @@ function generate_successmail() {
             #build config can occur multiple times in file. Only extract first one
             head -n 60 "$BUILDLOG" | sed -n '/Build Configuration:/,/^$/p'
         fi
+
+        echo "Login: workspace_login.sh --server=${JENKINS_URL:0:(-8)} --builder=$NODE_NAME --build-dir=$BUILD"
     } > "$MFILE"
 }
 
@@ -587,6 +582,15 @@ create_report_statfile() {
     local STATFILE=$1
     local JENKINS_URL=$2
     local JOB_BASE_NAME=$3
+    local BUILD=$4
+
+    # Catch number of setscene and scratch in 'do_populate_sysroot: ##.#% sstate' line
+    sstate_reuse=$(cat "$BUILD"/00-wrbuild.log | grep 'NOTE:   do_populate_sysroot:' | head -n 1)
+    array=(${sstate_reuse// / })
+    sstate_reuse_percent="${array[4]}"
+    sstate_reuse_setscene=$(echo "${array[6]}" | sed 's/reuse(//g')
+    #sstate_reuse_scratch="${array[8]}"
+
     {
         echo "{"
         echo "  \"build_info\": {"
@@ -597,12 +601,15 @@ create_report_statfile() {
         fi
         if [ -n "$BUILD_ID" ]; then
             echo "    \"build_id\": \"$BUILD_ID\","
+            echo "    \"build_group_id\": \"$BUILD_GROUP_ID\","
+            echo "    \"sysroot_sstate_reuse_percent\": \"$sstate_reuse_percent\","
+            echo "    \"sysroot_sstate_reuse_setscene\": \"$sstate_reuse_setscene\","
             if [ -z "$JOB_BASE_NAME" ]; then
                 JOB_BASE_NAME='WRLinux_Build'
             fi
             echo "    \"job_console_log\": \""$JENKINS_URL"job/"$JOB_BASE_NAME"/"$BUILD_ID"/console\","
         fi
-    } >> "$STATFILE"
+    } > "$STATFILE"
 }
 
 function get_wrlinux_version() {
@@ -619,6 +626,8 @@ function get_wrlinux_version() {
         wr-10.17*)         wrlinux_ver=10.17 ;;
         WRLINUX_10_18*)    wrlinux_ver=10.18 ;;
         wr-10.18*)         wrlinux_ver=10.18 ;;
+        WRLINUX_10_19*)    wrlinux_ver=10.19 ;;
+        wr-10.19*)         wrlinux_ver=10.19 ;;
         *)                 ;;
     esac
 
@@ -644,4 +653,26 @@ function detect_built_images() {
             find "$IMG_DIR" -name "*${image}"
         done
     fi
+}
+
+function convert_to_json() {
+    local KEY=
+    local VAL=
+    local ARR=();
+    local FILE=$1
+    while read -r LINE
+    do
+        # key is before : and value is after colon. Trim the value of a leading space
+        KEY="${LINE%%:*}"
+        VAL="${LINE#*:}"
+        ARR+=( "$KEY" "${VAL# }" )
+    done < "$FILE"
+
+    local LEN=${#ARR[@]}
+    echo "{"
+    for (( i=0; i<LEN; i+=2 ))
+    do
+        printf '  "%s": "%s",\n' "${ARR[i]}" "${ARR[i+1]}"
+    done
+    printf '  "eof": ""\n}\n'
 }

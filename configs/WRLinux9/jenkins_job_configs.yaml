@@ -1,4 +1,4 @@
-# Copyright (c) 2018 Wind River Systems Inc.
+# Copyright (c) 2020 Wind River Systems Inc.
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -48,7 +48,7 @@ system:
 ci_config:
   # The branch to use for the ci-scripts repo. Used for local modifications.
   # Default: master
-  ci_branch: master
+  ci_branch: feb142020
   # The location of the ci-scripts repo. Override to use local mirror.
   # Default: https://github.com/WindRiver-OpenSourceLabs/ci-scripts.git
   ci_repo: https://github.com/ywangwrs/ci-scripts.git
@@ -88,6 +88,9 @@ layerindex_overrides:
     layer_vcs_subdir:
 
 build:
+  # Build group id is used to group a set of builds, typically generated from
+  # devbuild, it doesn't have default value
+  build_group_id:
   # The Docker image used for the build.
   # Default: ubuntu1604_64.
   image: ubuntu1604_64
@@ -126,7 +129,7 @@ post_build:
     SMTPSERVER: 
     REPORT_SERVER: 
     #- EMAIL: 'user1@windriver.com user2@xxx.com'
-    EMAIL: 
+    EMAIL: yang.wang@windriver.com
   # list of scripts in the scripts/ directory to be run after
   # a successful build.
   # Default: rsync,cleanup.
