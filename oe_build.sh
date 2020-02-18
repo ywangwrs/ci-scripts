@@ -99,6 +99,12 @@ CACHE_BASE="${TOP}/../wrlinux-${SOURCE_LAYOUT}-${BRANCH}"
 # Use reference clone support in repo to speed up setup.sh
 export REPO_MIRROR_LOCATION="$CACHE_BASE"
 
+# if setup_args does not contain --accept-eula=yes, add it
+# https://stackoverflow.com/questions/14366390/check-if-an-element-is-present-in-a-bash-array/14367368#14367368
+if [[ " ${SETUP_ARGS[*]} " != *" --accept-eula=yes "* ]]; then
+    SETUP_ARGS+=('--accept-eula=yes')
+fi
+
 # if setup_args starts with -- add the setup command
 if [ "${SETUP_ARGS[0]:0:2}" == '--' ]; then
     if [ -z "$WRLINUX" ]; then
@@ -112,13 +118,19 @@ if [ "${SETUP_ARGS[0]:0:2}" == '--' ]; then
         exit 1
     fi
 
+    # devbuild only works when patches are on same server as repos
+    # due to way repo sets up the remotes
+    if [ -f "${BUILD}/layerindex.json" ]; then
+        WRLINUX="$REMOTE"
+    fi
+
     # Make a clone of local mirror so setup will use local mirror
     wrlinux_setup_clone "$WRLINUX" "$BUILD" "$BRANCH" "$TOP"
 
     SETUP_ARGS=("$BUILD/${WRLINUX:(-9)}/setup.sh" "${SETUP_ARGS[@]}")
 fi
 
-if [ -f "${TOP}/layerindex.json" ]; then
+if [ -f "${BUILD}/layerindex.json" ]; then
     log "Found serialized layerindex data for layerindex override"
 
     # modify settings.py to force setup to use local layerindex
@@ -129,7 +141,7 @@ if [ -f "${TOP}/layerindex.json" ]; then
         "$SETTINGS"
 
     mkdir -p "$BUILD"/config/index-cache
-    cp "${TOP}/layerindex.json" "${BUILD}/config/index-cache/layers_wrs_com.json"
+    cp "${BUILD}/layerindex.json" "${BUILD}/config/index-cache/layers_wrs_com.json"
 
     # HACK: remove mirror-index from cache to prevent setup from loading it
     rm -rf "${CACHE_BASE}/mirror-index"
@@ -151,36 +163,58 @@ else
     . ./environment-setup-x86_64-wrlinuxsdk-linux > "$BUILD/00-prebuild.log" 2>&1
     . ./oe-init-build-env "$BUILD_NAME" > "$BUILD/00-prebuild.log" 2>&1
 
+    # if there is a local.conf in $TOP, override the default local.conf
+    if [ -f "$BUILD/local.conf" ]; then
+        cp "$BUILD/local.conf" conf/local.conf
+    fi
+
     # Run prebuild command which may modify files like local.conf
     log "${PREBUILD_CMD[*]}" 2>&1 | tee -a "$BUILD/00-prebuild.log"
     $TIME bash -c "${PREBUILD_CMD[*]}" >> "$BUILD/00-prebuild.log" 2>&1
+    RET=$?
     log_stats "Prebuild" "$BUILD"
     echo "Prebuild: ${PREBUILD_CMD[*]}" >> "$STATFILE"
 
+    if [ "$RET" != 0 ]; then
+        log "Prebuild failed"
+    fi
+
     # Run prebuild command for test which may modify files like local.conf
-    if [ "${PREBUILD_CMD_FOR_TEST[*]}" != 'null' ]; then
+    if [ "$RET" == 0 ] && [ ${#PREBUILD_CMD_FOR_TEST[@]} -ne 0 ]; then
+        echo "Prebuild_for_test: ${PREBUILD_CMD_FOR_TEST[*]}" >> "$STATFILE"
         log "${PREBUILD_CMD_FOR_TEST[*]}" 2>&1 | tee -a "$BUILD/00-prebuild.log"
         $TIME bash -c "$WORKSPACE/ci-scripts/${PREBUILD_CMD_FOR_TEST[*]}" >> "$BUILD/00-prebuild.log" 2>&1
+        RET=$?
         log_stats "Prebuild_for_test" "$BUILD"
-        echo "Prebuild_for_test: ${PREBUILD_CMD_FOR_TEST[*]}" >> "$STATFILE"
+        if [ "$RET" != 0 ]; then
+            log "Prebuild for Test Image failed"
+        fi
     fi
-
-    # Source toaster start script to prepare Toaster GUI
-    if [ "$TOASTER" == "enable" ]; then
-        source toaster start webport=0.0.0.0:8800 >> "$BUILD/00-prebuild.log" 2>&1
-    fi
-
-    echo "Build: ${BUILD_CMD[*]}" >> "$STATFILE"
-    log "${BUILD_CMD[*]}" 2>&1 | tee --append "$BUILD/00-wrbuild.log"
-    $TIME bash -c "${BUILD_CMD[*]}" 2>&1 | log_stdout >> "$BUILD/00-wrbuild.log"
-
-    RET=${PIPESTATUS[0]}
 
     if [ "$RET" == 0 ]; then
+        # Source toaster start script to prepare Toaster GUI
+        if [ "$TOASTER" == "enable" ]; then
+            source toaster start webport=0.0.0.0:8800 >> "$BUILD/00-prebuild.log" 2>&1
+        fi
+
+        echo "Build: ${BUILD_CMD[*]}" >> "$STATFILE"
+        log "${BUILD_CMD[*]}" 2>&1 | tee --append "$BUILD/00-wrbuild.log"
+        $TIME bash -c "${BUILD_CMD[*]}" 2>&1 | log_stdout >> "$BUILD/00-wrbuild.log"
+        RET=${PIPESTATUS[0]}
+        log_stats "Build" "$BUILD"
+        if [ "$RET" != 0 ]; then
+            log "Build failed"
+        fi
+    else
+        log "Skipping Build due to Prebuild failures"
+    fi
+
+    if [ "$RET" == 0 ] && [ ${#BUILD_CMD_FOR_TEST[@]} -ne 0 ]; then
         echo "Build for test: ${BUILD_CMD_FOR_TEST[*]}" >> "$STATFILE"
         log "${BUILD_CMD_FOR_TEST[*]}" 2>&1 | tee --append "$BUILD/00-wrbuild.log"
         $TIME bash -c "${BUILD_CMD_FOR_TEST[*]}" 2>&1 | log_stdout >> "$BUILD/00-wrbuild.log"
         RET=${PIPESTATUS[0]}
+        log_stats "Build_for_test" "$BUILD"
 
         # If build failed but all images got generated, don't exit 1
         if [ "$RET" != 0 ]; then
@@ -194,16 +228,16 @@ else
                 log "Detect built images: Build failed but all images got generated"
                 RET=2 # used by Jenkins to mark build as UNSTABLE but continue to run tests
             fi
+        else
+            log "Build for Test failed"
         fi
     fi
 
     echo "FinishUTC: $(date +%s)" >> "$STATFILE"
-    log_stats "Build" "$BUILD"
 
     if [ "$RET" == 0 ]; then
         echo "Status: PASSED" >> "$STATFILE"
     elif [ "$RET" == 1 ]; then
-        log "Build failed"
         echo "Status: FAILED" >> "$STATFILE"
     else
         echo "Status: PASSED" >> "$STATFILE"

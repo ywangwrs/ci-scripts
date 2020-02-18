@@ -28,6 +28,7 @@ if [ ! -f "$LOCALCONF" ]; then
 fi
 
 KERNEL_TYPE=
+TARGET_SUPPORTED_KTYPE=
 RM_WORK=yes
 PKG_JOBS=
 JOBS=
@@ -51,12 +52,12 @@ PREMIRROR_PATH=
 DL_DIR=
 MACHINE=
 SHARED_SSTATE_DIR=
-SHARED_SSTATE_MIRRORS=
 
 for i in "$@"
 do
     case $i in
         --kernel-type=*)        KERNEL_TYPE="${i#*=}" ;;
+        --target-supported-ktype=*)          TARGET_SUPPORTED_KTYPE="${i#*=}" ;;
         --rm_work=*)            RM_WORK="${i#*=}" ;;
         --parallel_pkgbuilds=*) PKG_JOBS="${i#*=}" ;;
         --jobs=*)               JOBS="${i#*=}" ;;
@@ -76,13 +77,11 @@ do
         --test-image=*)         TEST_IMAGE="${i#*=}" ;;
         --oe-test=*)            OE_TEST="${i#*=}" ;;
         --oe-test-suites=*)     OE_TEST_SUITES="${i#*=}" ;;
-        --lava-test=*)          LAVA_TEST="${i#*=}" ;;
         --no-network=*)         BB_NO_NETWORK="${i#*=}" ;;
         --premirror_path=*)     PREMIRROR_PATH="${i#*=}" ;;
         --dl_dir=*)             DL_DIR="${i#*=}" ;;
         --machine=*)            MACHINE="${i#*=}" ;;
         --enable-shared-sstate=*) SHARED_SSTATE_DIR="${i#*=}" ;;
-        --enable-sstate-mirrors=*) SHARED_SSTATE_MIRRORS="${i#*=}" ;;
         *)                      ;;
     esac
     shift
@@ -185,7 +184,11 @@ process_whitelist_intel(){
 
 {
     if [ -n "$KERNEL_TYPE" ]; then
-        echo "PREFERRED_PROVIDER_virtual/kernel = \"linux-yocto\""
+        echo "PREFERRED_PROVIDER_virtual/kernel = \"$KERNEL_TYPE\""
+    fi
+
+    if [ -n "$TARGET_SUPPORTED_KTYPE" ]; then
+        echo "TARGET_SUPPORTED_KTYPES_append  = \" $TARGET_SUPPORTED_KTYPE\""
     fi
 
     if [ "$RM_WORK" == "yes" ]; then
@@ -255,7 +258,7 @@ process_whitelist_intel(){
         echo "IMAGE_FSTYPES_remove = \"live\""
     fi
 
-    if [ -n "$OE_TEST" ] && [ "$OE_TEST" != "no" ] || [ "$LAVA_TEST" == "yes" ]; then
+    if [ -n "$OE_TEST" ] && [ "$OE_TEST" != "no" ]; then
         echo "INHERIT += \"testexport\""
 
         if [ "$OE_TEST" == "with_wrlinux9" ]; then
@@ -281,21 +284,6 @@ process_whitelist_intel(){
         fi
     fi
 
-    if [ "$LAVA_TEST" == "yes" ]; then
-        echo "IMAGE_INSTALL_append += \"rt-tests ltp sysbench iozone3 bonnie++ fwts dmidecode fio busybox\""
-        echo "PNWHITELIST_openembedded-layer += 'sysbench'"
-        echo "PNWHITELIST_openembedded-layer += 'fwts'"
-        echo "PNWHITELIST_openembedded-layer += 'fio'"
-        echo "PNWHITELIST_openembedded-layer += 'busybox'"
-        echo "PNWHITELIST_openembedded-layer += 'numactl'"
-        echo "PREFERRED_PROVIDER_virtual/kernel = 'linux-yocto-rt'"
-
-        echo "LINUX_KERNEL_TYPE = 'preempt-rt'"
-        echo "BB_NO_NETWORK_pn-fwts = '0'"
-        echo "BB_NO_NETWORK_pn-fio = '0'"
-        echo "BB_NO_NETWORK_pn-sysbench = '0'"
-    fi
-
     if [ -n "$PREMIRROR_PATH" ]; then
         # echo does not expand the \n which is required for the PREMIRROR syntax to work
         echo "PREMIRRORS_append = \" .*://.*/.* file://${PREMIRROR_PATH}/downloads/ \n git://.*/.* git://${PREMIRROR_PATH}/git/MIRRORNAME;protocol=file \n \""
@@ -312,10 +300,6 @@ process_whitelist_intel(){
 
     if [ -n "$SHARED_SSTATE_DIR" ]; then
         echo "SSTATE_DIR = \"$WORKSPACE/../$SHARED_SSTATE_DIR/\""
-    fi
-
-    if [ -n "$SHARED_SSTATE_MIRRORS" ]; then
-        echo "SSTATE_MIRRORS ?= \"file://.* $SHARED_SSTATE_MIRRORS/PATH\""
     fi
 } >> "$LOCALCONF"
 

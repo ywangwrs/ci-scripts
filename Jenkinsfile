@@ -34,12 +34,46 @@ node('docker') {
     return command
   }
 
+  // function to run docker command after ensuring the image is up to date
+  def docker_run = {
+    String params, String image, String cmd ->
+    imageId = sh(returnStdout: true, script: "docker image inspect --format='{{json .Id}}' ${image} | tr -d '\"'").trim()
+    if ( imageId.startsWith('sha256') ) {
+      ret = sh(returnStatus: true, script: "docker pull ${image}")
+      if ( ret != 0 ) {
+        echo "Docker pull failed. Using local version of image: ${imageId}"
+      } else {
+        echo "Docker image ${image} is up to date"
+      }
+    } else {
+      def counter = 10
+      while ( counter > 0 ) {
+        ret = sh(returnStatus: true, script: "docker pull ${image}")
+        if ( ret == 0 ) {
+          break
+        }
+        echo "Docker pull of ${image} failed. Waiting 60 seconds"
+        sleep 60
+        counter = counter - 1
+      }
+      if ( counter == 0 ) {
+        error "Unable to pull ${image}. Please check image name and registry availablity. Cannot continue."
+      }
+    }
+    echo "Using image ${image} with ID: ${imageId}"
+    sh "docker run ${params} ${image} ${cmd}"
+  }
+
   // Node name is from docker swarm is hostname + dash + random string. Remove random part of recover hostname
   def hostname = "${NODE_NAME}"
   hostname = hostname[0..-10]
   def common_docker_params = "--rm --name build-${BUILD_ID} --hostname ${hostname} -i --tmpfs /tmp --tmpfs /var/tmp -v /etc/localtime:/etc/localtime:ro -u 1000 -v ci_jenkins_agent:/home/jenkins --ulimit nofile=1024:1024 "
-  common_env_args = ["LANG=en_US.UTF-8", "BUILD_ID=${BUILD_ID}", "WORKSPACE=${WORKSPACE}", "JENKINS_URL=${JENKINS_URL}" ]
+  common_env_args = ["LANG=en_US.UTF-8", "BUILD_ID=${BUILD_ID}", "WORKSPACE=${WORKSPACE}", "JENKINS_URL=${JENKINS_URL}", "BUILD_GROUP_ID=" + params.BUILD_GROUP_ID, "NODE_NAME=${NODE_NAME}" ]
   common_docker_params = add_env( common_docker_params, common_env_args )
+  def BUILD_DIR="${WORKSPACE}/builds/builds-${BUILD_ID}"
+
+  // set the build display name
+  currentBuild.displayName = "#${BUILD_NUMBER}-${NAME}"
 
   stage('Docker Run Check') {
     dir('ci-scripts') {
@@ -61,8 +95,8 @@ node('docker') {
       }
     }
 
-    def cmd="${WORKSPACE}/ci-scripts/wrlinux_update.sh ${BRANCH}"
-    sh "docker run ${docker_params} ${REGISTRY}/${IMAGE} ${cmd}"
+    String cmd="${WORKSPACE}/ci-scripts/wrlinux_update.sh ${BRANCH}"
+    docker_run("${docker_params}", "${REGISTRY}/ubuntu1604_64", "${cmd}")
 
     // cleanup credentials
     if (params.GIT_CREDENTIAL == "enable") {
@@ -98,7 +132,8 @@ node('docker') {
               }
             }
             sh "./layerindex_export.sh --branch=${BRANCH}"
-            sh "mv -f layerindex.json ${WORKSPACE}"
+            sh "mkdir -p ${BUILD_DIR}"
+            sh "mv -f layerindex.json ${BUILD_DIR}"
           } finally {
             sh "./layerindex_stop.sh"
           }
@@ -116,24 +151,48 @@ node('docker') {
         git(url:params.CI_REPO, branch:params.CI_BRANCH)
       }
 
-      def docker_params = common_docker_params + " -v /opt/sstate_cache:/home/jenkins/workspace/sstate_cache "
+      def docker_params = common_docker_params
       def env_args = ["MESOS_TASK_ID=${BUILD_ID}", "BASE=${WORKSPACE}", "REMOTE=${REMOTE}"]
-      if (params.TOASTER == "enable") {
-        docker_params = docker_params + ' --expose=8800 -P '
-        env_args = env_args + ["SERVICE_NAME=toaster", "SERVICE_CHECK_HTTP=/health"]
-      }
 
       env_args = env_args + ["NAME=${NAME}", "BRANCH=${BRANCH}"]
-      env_args = env_args + ["NODE_NAME=${NODE_NAME}", "SETUP_ARGS=\'${SETUP_ARGS}\'"]
+      env_args = env_args + ["SETUP_ARGS=\'${SETUP_ARGS}\'"]
       env_args = env_args + ["PREBUILD_CMD=\'${PREBUILD_CMD}\'", "PREBUILD_CMD_FOR_TEST=\'${PREBUILD_CMD_FOR_TEST}\'"]
       env_args = env_args + ["TEST=${TEST}", "TEST_CONFIGS_FILE=${TEST_CONFIGS_FILE}"]
       env_args = env_args + ["BUILD_CMD=\'${BUILD_CMD}\'", "TOASTER=${TOASTER}"]
       env_args = env_args + ["BUILD_CMD_FOR_TEST=\'${BUILD_CMD_FOR_TEST}\'"]
+      if (params.MACHINE != "") {
+        env_args = env_args + ["MACHINE=\'${MACHINE}\'"]
+      }
+      if (params.DISTRO != "") {
+        env_args = env_args + ["DISTRO=\'${DISTRO}\'"]
+      }
+
+      String image = "${REGISTRY}/${IMAGE}"
+      if ( params.IMAGE.contains('/') ) {
+        image = params.IMAGE
+      }
+
+      // Capture login params without toaster args
+      def login_params = docker_params
+      login_params = login_params + " --entrypoint /bin/bash -w=${BUILD_DIR} "
+      login_params = add_env( login_params, env_args)
+
+      sh "mkdir -p ${BUILD_DIR}"
+      writeFile file: "${BUILD_DIR}/build_login.sh", text: "docker run -it --init ${login_params} ${image}"
+
+      if (params.TOASTER == "enable") {
+        docker_params = docker_params + ' --expose=8800 -P '
+        env_args = env_args + ["SERVICE_NAME=toaster", "SERVICE_CHECK_HTTP=/health"]
+      }
       docker_params = add_env( docker_params, env_args )
       def cmd="${WORKSPACE}/ci-scripts/jenkins_build.sh"
 
+      if (params.LOCALCONF != "") {
+        writeFile file: "${BUILD_DIR}/local.conf", text: params.LOCALCONF
+      }
+
       try {
-        sh "docker run ${docker_params} ${REGISTRY}/${IMAGE} ${cmd}"
+        docker_run("${docker_params}", "${image}", "${cmd}")
       } catch (err) {
         def err_message = err.getMessage()
         if (err_message == "script returned exit code 2") {
@@ -152,13 +211,16 @@ node('docker') {
       dir('ci-scripts') {
         git(url:params.CI_REPO, branch:params.CI_BRANCH)
       }
-      def docker_params = common_docker_params + " --network=rsync_net "
+      def docker_params = common_docker_params
+      if (! params.POSTPROCESS_ARGS.contains('SYNC_SERVER')) {
+        docker_params = docker_params + " --network=rsync_net"
+      }
       def env_args = ["NAME=${NAME}"]
       env_args = env_args + ["POST_SUCCESS=${POST_SUCCESS}", "POST_FAIL=${POST_FAIL}", "TEST=" + params.TEST]
       env_args = env_args + params.POSTPROCESS_ARGS.tokenize(',')
       docker_params = add_env( docker_params, env_args )
       def cmd="${WORKSPACE}/ci-scripts/build_postprocess.sh"
-      sh "docker run --init ${docker_params} ${REGISTRY}/${POSTPROCESS_IMAGE} ${cmd}"
+      docker_run("${docker_params}", "${REGISTRY}/${POSTPROCESS_IMAGE}", "${cmd}")
     }
   }
 
@@ -174,8 +236,16 @@ node('docker') {
         env_args = env_args + params.TEST_ARGS.tokenize(',')
         env_args = env_args + params.POSTPROCESS_ARGS.tokenize(',')
         docker_params = add_env( docker_params, env_args )
+
+        def login_params = docker_params
+        login_params = login_params + " --entrypoint /bin/bash -w=${BUILD_DIR} "
+        login_params = add_env( login_params, env_args)
+
+        sh "mkdir -p ${BUILD_DIR}"
+        writeFile file: "${BUILD_DIR}/test_login.sh", text: "docker run -it --init ${login_params} ${REGISTRY}/${TEST_IMAGE}"
+
         def cmd="${WORKSPACE}/ci-scripts/${RUNTIME_TEST_CMD}"
-        sh "docker run --init ${docker_params} ${REGISTRY}/${TEST_IMAGE} ${cmd}"
+        docker_run("${docker_params}", "${REGISTRY}/${TEST_IMAGE}", "${cmd}")
       } else {
         println("Test is disabled, ignore 'Test' stage.")
       }
@@ -193,10 +263,7 @@ node('docker') {
         env_args = env_args + params.POSTPROCESS_ARGS.tokenize(',')
         docker_params = add_env( docker_params, env_args )
         def cmd="${WORKSPACE}/ci-scripts/test_postprocess.sh"
-        sh "docker run --init ${docker_params} ${REGISTRY}/${POST_TEST_IMAGE} ${cmd}"
-        def postporcess_args = params.POSTPROCESS_ARGS.replaceAll(',','; export ')
-        def test_args = params.TEST_ARGS.replaceAll(',','; export ')
-        sh "export ${postporcess_args} && export ${test_args} && ${WORKSPACE}/ci-scripts/scripts/copy2s3.sh ${NAME}"
+        docker_run("${docker_params}", "${REGISTRY}/${POST_TEST_IMAGE}", "${cmd}")
       } else {
         println("Test is disabled, ignore 'Post Test' stage.")
       }
