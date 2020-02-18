@@ -85,7 +85,7 @@ services:
       # Volume avoids recreating certs on every run
       - rproxy_nginx_config:/etc/nginx/keys
       # expose the rsync server contents over https
-      - rsync_builds:/var/lib/nginx/html/builds/:ro
+      - /opt/rsync/builds:/var/lib/nginx/html/builds/:ro
       # expose the jenkins auth content over https
       - jenkins_home:/var/lib/nginx/html/jenkins_home/:ro
 
