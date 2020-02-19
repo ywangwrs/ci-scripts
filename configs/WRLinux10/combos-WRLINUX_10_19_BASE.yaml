@@ -250,6 +250,7 @@
   name: qemux86-64_wrlinux-image-glibc-std
   prebuild:
   - build_configure.sh
+  - --no-network=0
   - --enable-bootimage=ext4
   - --enable-shared-sstate=sstate_cache
   setup:
