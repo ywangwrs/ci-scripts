@@ -41,7 +41,7 @@ cleanup() {
     find /home/jenkins/workspace/WRLinux_Build*/builds -maxdepth 1 -type d -name 'builds-*' -ctime +3 -exec rm -rf {} \;
 
     echo "Removing sstate files that have not been accessed in three days"
-    find /home/jenkins/workspace/*_sstate_cache -atime +3 -delete
+    find /home/jenkins/workspace/*sstate_cache -atime +3 -delete
 }
 
 cleanup "$@"
