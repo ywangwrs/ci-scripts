@@ -14,7 +14,7 @@
   lava_test_repo: https://github.com/ywangwrs/lava-test.git
   aws-ec2_qemu-x86_64:
     job_template: lava-test/jobs/templates/wrlinux-10/x86_64_qemu_job_oeqa-default-test_template.yaml
-    timeout: 300
+    timeout: 600
   remote:
     job_template: lava-test/jobs/templates/wrlinux-10/x86_64_job_oeqa-default-test_template.yaml
     timeout: 600
