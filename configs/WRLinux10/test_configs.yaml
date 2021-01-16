@@ -147,4 +147,7 @@
   purley_simics:
     job_template: lava-test/jobs/templates/wrlinux-10/purley_simics_job_linaro-smoke-test_template.yaml
     timeout: 600
+  qemu:
+    job_template: lava-test/jobs/templates/wrlinux-10/x86_64_qemu_job_linaro-smoke-test_template.json
+    timeout: 300
 
