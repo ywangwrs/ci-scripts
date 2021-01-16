@@ -17,6 +17,9 @@ BUILD="$WORKSPACE/builds/builds-$BUILD_ID"
 TEST_MAIL=${BUILD}/mail.txt
 TEST_REPORT=${BUILD}/${TEST}.csv
 OEQA_TEST_IMAGE=testexport.tar.gz
+API_VER='v0.2'
+ADMIN=lpdtest
+PASSWD=lpdtest
 
 # Create teststats.json file
 TEST_STATFILE=${BUILD}/teststats.json
@@ -61,17 +64,17 @@ function quit_test () {
     rsync -avL "$TEST_STATFILE" "rsync://${RSYNC_SERVER}/${RSYNC_DEST_DIR}/"
 
     # Get LAVA job log
-    LAVA_JOB_PLAIN_LOG="http://${LAVA_SERVER}/scheduler/job/${job_id}/log_file/plain"
-    LAVA_JOB_LOG="$BUILD/lava_job_${job_id}.log"
+    LAVA_JOB_PLAIN_LOG="http://${LAVA_SERVER}/scheduler/job/${JOB_ID}/log_file/plain"
+    LAVA_JOB_LOG="$BUILD/lava_job_${JOB_ID}.log"
     echo "curl -k $LAVA_JOB_PLAIN_LOG -o $LAVA_JOB_LOG"
     curl -k "$LAVA_JOB_PLAIN_LOG" -o "$LAVA_JOB_LOG"
     rsync -avL "$LAVA_JOB_LOG" "rsync://${RSYNC_SERVER}/${RSYNC_DEST_DIR}/"
 
     # Get LAVA test result in csv format
-    LAVA_JOB_RESULT_CSV="http://${LAVA_SERVER}/results/${job_id}/csv"
-    LAVA_JOB_RESULT_YAML="http://${LAVA_SERVER}/results/${job_id}/yaml"
-    LAVA_JOB_REPORT_CSV="$BUILD/lava_job_${job_id}_result.csv"
-    LAVA_JOB_REPORT_YAML="$BUILD/lava_job_${job_id}_result.yaml"
+    LAVA_JOB_RESULT_CSV="http://${LAVA_SERVER}/results/${JOB_ID}/csv"
+    LAVA_JOB_RESULT_YAML="http://${LAVA_SERVER}/results/${JOB_ID}/yaml"
+    LAVA_JOB_REPORT_CSV="$BUILD/lava_job_${JOB_ID}_result.csv"
+    LAVA_JOB_REPORT_YAML="$BUILD/lava_job_${JOB_ID}_result.yaml"
     echo "curl -k $LAVA_JOB_RESULT_CSV -o $LAVA_JOB_REPORT_CSV"
     curl -k "$LAVA_JOB_RESULT_CSV" -o "$LAVA_JOB_REPORT_CSV"
     echo "curl -k $LAVA_JOB_RESULT_YAML -o $LAVA_JOB_REPORT_YAML"
@@ -84,19 +87,36 @@ function quit_test () {
 }
 
 function get_job_status () {
-    LAVA_SERVER=$1
-    JOB_ID=$2
-    API_VER='v0.2'
+    JOB_ID=$1
 
-    job_status=$(curl -sL "${LAVA_SERVER}/api/${API_VER}/jobs/${JOB_ID}/" | grep -Po '"state":.*?[^\\]",' | sed 's/"state":"\(.*\)\",/\1/')
+    job_status=$(curl -sL "http://${LAVA_SERVER}/api/${API_VER}/jobs/${JOB_ID}/" | grep -Po '"state":.*?[^\\]",' | sed 's/"state":"\(.*\)\",/\1/')
 
     if [[ "$job_status" == "Finished" ]]; then
-        job_status=$(curl -sL "${LAVA_SERVER}/api/${API_VER}/jobs/${JOB_ID}/" | grep -Po '"health":.*?[^\\]",' | sed 's/"health":"\(.*\)\",/\1/')
+        job_status=$(curl -sL "http://${LAVA_SERVER}/api/${API_VER}/jobs/${JOB_ID}/" | grep -Po '"health":.*?[^\\]",' | sed 's/"health":"\(.*\)\",/\1/')
     fi
 }
 
-# Check if lava-tool exists
-command -v lava-tool >/dev/null 2>&1 || { echo >&2 "lava-tool required. Aborting."; exit 0; }
+function get_lava_token () {
+    local token_json=
+
+    token_json=$(curl -sL -d "{\"username\":\"$ADMIN\", \"password\":\"$PASSWD\"}" -H "Content-Type: application/json" -X POST "http://${LAVA_SERVER}/api/v0.1/token/")
+    token=$(echo "$token_json" | sed 's/{"token":"//g' | sed 's/"}//g')
+}
+
+function submit_lava_job() {
+    get_lava_token
+    local JSON=$1
+    local submit_json=
+
+    submit_json=$(curl -sL -H "Content-Type: application/json" -H "Authorization: Token $token" -X POST "http://${LAVA_SERVER}/api/${API_VER}/jobs/" -d@$JSON)
+
+    if [[ "$submit_json" == *"successfully submitted"* ]]; then
+        JOB_ID=$(echo $submit_json | sed 's/[^0-9]*//g')
+    else
+        echo "Submit LAVA job failed"
+        exit 1
+    fi
+}
 
 WRL_VER=$(get_wrlinux_version "$BUILD")
 
@@ -159,7 +179,7 @@ fi
 # when using simics instances in simics-docker
 SIMICS_IMG_ROOT='/images'
 
-FILE_LINK="${HTTP_ROOT}/${RSYNC_DEST_DIR}/${NAME}"
+FILE_LINK="${HTTP_ROOT}/tmp/${RSYNC_DEST_DIR}/${NAME}"
 
 {
     printf '    "LAVA_server": "%s",\n' "$LAVA_SERVER"
@@ -182,42 +202,10 @@ git clone --quiet "$LAVA_TEST_REPO"
 if [ -d "$repo_folder" ]; then
     printf '    "test_git_repo": "%s",\n' "$LAVA_TEST_REPO" >> "$TEST_STATFILE"
 
-    # LAVA authentication
-    echo "[LAVA-CMD] lava-tool auth-list |grep ${LAVA_SERVER}"
-    lava-tool auth-list | grep "$LAVA_SERVER"
-
-    # If the auth token exists, remove it because LAVA server could be updated and
-    # old token may not work any more
-    if [ $? == 0 ]; then
-        echo "[LAVA-CMD] lava-tool auth-remove http://${LAVA_USER}@${LAVA_SERVER}"
-        lava-tool auth-remove "http://${LAVA_USER}@${LAVA_SERVER}"
-
-        echo "[LAVA-CMD] lava-tool auth-list |grep ${LAVA_SERVER}"
-        lava-tool auth-list | grep "$LAVA_SERVER"
-        if [ $? == 0 ]; then
-            printf '    "ERROR": "lava-tool auth-remove failed!",\n' >> "$TEST_STATFILE"
-            quit_test -1
-        fi
-    fi
-
     # Replace LAVA auth-token if user specified in configs
     TOKEN_FILE="$repo_folder/scripts/auth-token"
     if [ ! -z "$LAVA_AUTH_TOKEN" ]; then
         echo "$LAVA_AUTH_TOKEN" > "$BUILD/$TOKEN_FILE"
-    fi
-
-    # Add latest auth token to make sure it's the latest
-    echo "[LAVA-CMD] lava-tool auth-add http://${LAVA_USER}@${LAVA_SERVER} \
-        --token-file $BUILD/$TOKEN_FILE"
-    lava-tool auth-add "http://${LAVA_USER}@${LAVA_SERVER}" --token-file \
-        "${BUILD}/$TOKEN_FILE"
-
-    echo "[LAVA-CMD] lava-tool auth-list |grep ${LAVA_SERVER}"
-    lava-tool auth-list |grep "$LAVA_SERVER"
-    if [ $? != 0 ]; then
-        printf '    "ERROR": "LAVA Server $LAVA_SERVER is in unhealthy status.",\n' >> "$TEST_STATFILE"
-        echo "LAVA Server $LAVA_SERVER is in unhealthy status, exit!"
-        quit_test -1
     fi
 else
     printf '    "ERROR": "clone git repo: %s failed!",\n' "$repo_folder" >> "$TEST_STATFILE"
@@ -240,21 +228,18 @@ IMAGE_NAME="${IMAGE_FULL_NAME%.tar.bz2}"
 echo "IMAGE_NAME = $IMAGE_NAME"
 
 # Find dtb file
-DTB_FILE=$(ls ./*.dtb | tail -1)
-echo "DTB_FILE = $DTB_FILE"
+#DTB_FILE=$(ls ./*.dtb | tail -1)
+#echo "DTB_FILE = $DTB_FILE"
 
 # Find rpm-doc file name
-RPM_NAME=$(ls rpm-doc*)
-echo "RPM_NAME = $RPM_NAME"
-
-# Find initramfs file name
-INITRAMFS_NAME=$(ls *rootfs.cpio.gz)
-echo "INITRAMFS_NAME = $INITRAMFS_NAME"
+#RPM_NAME=$(ls rpm-doc*)
+#echo "RPM_NAME = $RPM_NAME"
 
 # Set LAVA test job name
 TIME_STAMP=$(date +%Y%m%d_%H%M%S)
 TEST_JOB="$BUILD/$repo_folder/test_${TIME_STAMP}.yaml"
 printf '    "LAVA_test_job": "%s",\n' "$TEST_JOB" >> "$TEST_STATFILE"
+echo "TEST_JOB: $TEST_JOB"
 
 popd
 
@@ -262,76 +247,53 @@ popd
 JOB_TEMPLATE="$BUILD/$LAVA_JOB_TEMPLATE"
 cp -f "$JOB_TEMPLATE" "$TEST_JOB"
 
-if [[ "$TEST_DEVICE" == *"simics"* ]]; then
-    sed -i "s@HDD_IMG@${SIMICS_IMG_ROOT}\/${RSYNC_DEST_DIR}\/${NAME}\/${IMAGE_NAME}.hddimg@g" "$TEST_JOB"
-elif [[ "$TEST_DEVICE" == "qemu-x86_64" ]]; then
-    sed -i "s@KERNEL_IMG@${FILE_LINK}\/${KERNEL_FILE}@g; \
-            s@HDD_IMG@${FILE_LINK}\/${IMAGE_NAME}.hddimg@g; \
-            s@INITRD_IMG@${FILE_LINK}\/${INITRAMFS_NAME}@g" "$TEST_JOB"
-elif [[ "$TEST_DEVICE" == *"qemu-arm"* ]] || \
-     [ "$TEST_DEVICE" == "aws-ec2_qemu-x86_64" ] || \
-     [ "$TEST_DEVICE" == "aws-ec2_qemu-ppc" ] || \
-     [ "$TEST_DEVICE" == "aws-ec2_qemu-mips64" ]; then
-    sed -i "s@KERNEL_IMG@${NFS_ROOT}\/${RSYNC_DEST_DIR}\/${NAME}\/${KERNEL_FILE}@g; \
-            s@EXT4_IMG@${NFS_ROOT}\/${RSYNC_DEST_DIR}\/${NAME}\/${IMAGE_NAME}.ext4@g; \
-            s@DTB_FILE@${NFS_ROOT}\/${RSYNC_DEST_DIR}\/${NAME}\/${DTB_FILE}@g" "$TEST_JOB"
-else
-    sed -i "s@KERNEL_IMG@${NFS_ROOT}\/${RSYNC_DEST_DIR}\/${NAME}\/${KERNEL_FILE}@g; \
-            s@ROOTFS@${NFS_ROOT}\/${RSYNC_DEST_DIR}\/${NAME}\/${IMAGE_NAME}.tar.bz2@g; \
-            s@DTB_FILE@${NFS_ROOT}\/${RSYNC_DEST_DIR}\/${NAME}\/${DTB_FILE}@g" "$TEST_JOB"
-fi
+sed -i "s#KERNEL_IMG#${FILE_LINK}\/${KERNEL_FILE}#g; \
+        s#ROOTFS_IMG#${FILE_LINK}\/${IMAGE_NAME}.ext4#g" "$TEST_JOB"
 
 # For OE QA test specifically
-if [[ "$TEST" == *"oeqa"* ]]; then
-    sed -i "s@TEST_PACKAGE@$FILE_LINK\/${OEQA_TEST_IMAGE}@g; \
-            s@RPM_FILE@$FILE_LINK\/${RPM_NAME}@g; \
-            s@MANIFEST_FILE@$FILE_LINK\/${IMAGE_NAME}.manifest@g" "$TEST_JOB"
-fi
-#cat "$TEST_JOB"
+#if [[ "$TEST" == *"oeqa"* ]]; then
+#    sed -i "s@TEST_PACKAGE@$FILE_LINK\/${OEQA_TEST_IMAGE}@g; \
+#            s@RPM_FILE@$FILE_LINK\/${RPM_NAME}@g; \
+#            s@MANIFEST_FILE@$FILE_LINK\/${IMAGE_NAME}.manifest@g" "$TEST_JOB"
+#fi
 
 if [ -z "$RETRY" ]; then
     RETRY=0;
 fi
 printf '    "retry_times": %d,\n' "$RETRY" >> "$TEST_STATFILE"
 
-echo "Start running LAVA test ..."
-
 for (( r=0; r<=RETRY; r++ ))
 do
     # Submit an example job
-    echo "[LAVA-CMD] lava-tool submit-job http://${LAVA_USER}@${LAVA_SERVER} $TEST_JOB"
-    ret=$(lava-tool submit-job "http://${LAVA_USER}@${LAVA_SERVER}" "$TEST_JOB")
-    job_id=${ret//submitted as job: http:\/\/${LAVA_SERVER}\/scheduler\/job\//}
+    echo "Submit LAVA job ..."
+    submit_lava_job "$TEST_JOB"
 
-    if [ -z "$job_id" ]; then
-        printf '    "ERROR": "job_id = %d, failed to submit LAVA job!",\n' "$job_id" >> "$TEST_STATFILE"
+    if [ -z "$JOB_ID" ]; then
+        printf '    "ERROR": "JOB_ID = %d, failed to submit LAVA job!",\n' "$JOB_ID" >> "$TEST_STATFILE"
         quit_test -1
     else
-        printf '\n    "LAVA_test_job_id": %d,\n' "$job_id" >> "$TEST_STATFILE"
+        printf '\n    "LAVA_test_JOB_ID": %d,\n' "$JOB_ID" >> "$TEST_STATFILE"
     fi
-
-    echo "[LAVA-CMD] lava-tool job-details http://${LAVA_USER}@${LAVA_SERVER} ${job_id}"
-    lava-tool job-details "http://${LAVA_USER}@${LAVA_SERVER}" "$job_id"
 
     # Echo LAVA job links
     {
-        printf '    "test_job_def": "http://%s/scheduler/job/%d/definition",\n' "$LAVA_SERVER" "$job_id"
-        printf '    "test_log": "http://%s/scheduler/job/%d",\n' "$LAVA_SERVER" "$job_id"
-        printf '    "test_report": "http://%s/results/%d",\n' "$LAVA_SERVER" "$job_id"
+        printf '    "test_job_def": "http://%s/scheduler/job/%d/definition",\n' "$LAVA_SERVER" "$JOB_ID"
+        printf '    "test_log": "http://%s/scheduler/job/%d",\n' "$LAVA_SERVER" "$JOB_ID"
+        printf '    "test_report": "http://%s/results/%d",\n' "$LAVA_SERVER" "$JOB_ID"
     } >> "$TEST_STATFILE"
 
     # Loop $LAVA_JOB_TIMEOUT seconds to wait test result
     TEST_LOOPS=$((LAVA_JOB_TIMEOUT / 10))
     for (( c=1; c<="$TEST_LOOPS"; c++ ))
     do
-       get_job_status "$LAVA_SERVER" "$job_id"
+       get_job_status "$JOB_ID"
        echo "$c. Job Status: $job_status"
        if [ "$job_status" == 'Complete' ]; then
            printf '    "test_job_status": "Completed",\n' >> "$TEST_STATFILE"
 
            # Generate test report
-           echo "curl http://${LAVA_SERVER}/results/${job_id}/0_${TEST}/csv > $TEST_REPORT"
-           curl "http://${LAVA_SERVER}/results/${job_id}/0_${TEST}/csv" > "$TEST_REPORT"
+           echo "curl http://${LAVA_SERVER}/results/${JOB_ID}/0_${TEST}/csv > $TEST_REPORT"
+           curl "http://${LAVA_SERVER}/results/${JOB_ID}/0_${TEST}/csv" > "$TEST_REPORT"
 
            if [ -f "$TEST_REPORT" ]; then
                quit_test 0
