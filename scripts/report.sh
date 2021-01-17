@@ -44,11 +44,6 @@ report() {
 
     get_jenkins_log "$BUILD"
 
-    if [ -z "$REPORT_SERVER" ]; then
-        echo "Do not know report server"
-        exit 0
-    fi
-
     command -v curl >/dev/null 2>&1 || { echo >&2 "curl required. Aborting."; exit 0; }
 
     # Handle build failure report
@@ -85,15 +80,6 @@ report() {
         if [ -f "$BUILD/00-FAIL" ]; then
             echo "WARNING from report: Build failed! Test should not continue."
         fi
-    fi
-
-    if [[ "$TEST_DEVICE" == 'remote' ]]; then
-        echo "Report step will be done remotely."
-    else
-        echo "Reporting to $REPORT_SERVER"
-        current_date=$(date +%Y.%m.%d)
-        # report to elasticsearch server
-        curl -XPOST "${REPORT_SERVER}/wrigel-${current_date}/logs" -H 'Content-Type: application/json' -d @"$REPORT_STATFILE"
     fi
 }
 

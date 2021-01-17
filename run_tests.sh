@@ -125,7 +125,7 @@ if [ -z "$TEST_DEVICE" ]; then
 fi
 
 if [ -z "$TEST" ]; then
-    TEST=oeqa-default-test
+    TEST=linaro-smoke-test
 fi
 
 {
@@ -173,11 +173,6 @@ LAVA_SERVER=yow-lpdtest.wrs.com:8080,NFS_ROOT=/net/yow-lpdtest/var/lib/tftpboot,
 HTTP_ROOT=http://128.224.56.215/tftpboot,RSYNC_DEST_DIR=builds/x86-64_oe-test-04"
     quit_test -1
 fi
-
-# when using simics instances in simics server
-#SIMICS_IMG_ROOT="$NFS_ROOT"
-# when using simics instances in simics-docker
-SIMICS_IMG_ROOT='/images'
 
 FILE_LINK="${HTTP_ROOT}/tmp/${RSYNC_DEST_DIR}/${NAME}"
 
@@ -239,7 +234,6 @@ echo "IMAGE_NAME = $IMAGE_NAME"
 TIME_STAMP=$(date +%Y%m%d_%H%M%S)
 TEST_JOB="$BUILD/$repo_folder/test_${TIME_STAMP}.yaml"
 printf '    "LAVA_test_job": "%s",\n' "$TEST_JOB" >> "$TEST_STATFILE"
-echo "TEST_JOB: $TEST_JOB"
 
 popd
 

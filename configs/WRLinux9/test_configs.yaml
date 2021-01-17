@@ -60,3 +60,6 @@
   qemu-x86_64:
     job_template: lava-test/jobs/templates/wrlinux-10/x86_64_qemu_job_lava-smoke-test_template.yaml
     timeout: 300
+  qemu:
+    job_template: lava-test/jobs/templates/wrlinux-10/x86_64_qemu_job_linaro-smoke-test_template.json
+    timeout: 300
